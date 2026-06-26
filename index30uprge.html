@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>מערכת דיווח עובדים</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh;direction:rtl;-webkit-font-smoothing:antialiased;}
+#loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.9);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;}
+.spinner{width:44px;height:44px;border:4px solid #eee;border-top-color:#1a1a2e;border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:14px;color:#666;font-weight:600;}
+
+/* SITE PICKER */
+#site-picker{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a2e,#0f3460);padding:1.5rem;}
+.picker-card{background:white;border-radius:20px;padding:2.5rem 2rem;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.35);}
+.picker-logo{text-align:center;margin-bottom:2rem;}
+.picker-logo .icon{width:64px;height:64px;background:#1a1a2e;border-radius:16px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:1rem;}
+.picker-logo .icon svg{width:32px;height:32px;fill:white;}
+.picker-logo h1{font-size:22px;font-weight:700;color:#1a1a2e;}
+.picker-logo p{font-size:13px;color:#888;margin-top:4px;}
+.sites-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1.2rem;}
+.site-btn{background:#f8f9fa;border:1.5px solid #e0e0e0;border-radius:12px;padding:1rem;cursor:pointer;text-align:center;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:.5rem;}
+.site-btn:hover{background:#eef2ff;border-color:#1a1a2e;}
+.site-btn .site-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;}
+.site-btn .site-name{font-size:14px;font-weight:700;color:#1a1a2e;}
+.site-btn .site-count{font-size:11px;color:#888;}
+.supermaster-btn{width:100%;background:#1a1a2e;color:white;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;margin-top:.5rem;}
+
+/* LOGIN */
+#login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a2e,#0f3460);padding:1rem;}
+.login-card{background:white;border-radius:20px;padding:2.5rem 2rem;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.35);}
+.login-back{background:none;border:none;color:#1a1a2e;font-size:13px;cursor:pointer;margin-bottom:1rem;display:flex;align-items:center;gap:5px;padding:0;}
+.login-logo{text-align:center;margin-bottom:1.5rem;}
+.login-logo .icon{width:56px;height:56px;background:#1a1a2e;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:.8rem;}
+.login-logo .icon svg{width:28px;height:28px;fill:white;}
+.login-logo h1{font-size:20px;font-weight:700;color:#1a1a2e;}
+.login-logo .site-label{font-size:12px;color:#888;margin-top:3px;}
+.form-group{margin-bottom:1.1rem;}
+.form-group label{display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:5px;}
+.form-group select,.form-group input{width:100%;padding:11px 13px;border:1.5px solid #e0e0e0;border-radius:9px;font-size:14px;outline:none;background:white;direction:rtl;-webkit-appearance:none;}
+.form-group select:focus,.form-group input:focus{border-color:#1a1a2e;}
+.btn-login{width:100%;padding:13px;background:#1a1a2e;color:white;border:none;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;margin-top:.4rem;}
+.error-msg{color:#e53e3e;font-size:12px;text-align:center;margin-top:7px;min-height:18px;}
+
+/* APP */
+#app{display:none;min-height:100vh;}
+.header{background:#1a1a2e;color:white;padding:0 1rem;height:54px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.header-left{display:flex;align-items:center;gap:.6rem;}
+.header-title{font-size:15px;font-weight:700;}
+.header-site{font-size:11px;color:#aaa;background:rgba(255,255,255,.1);padding:3px 10px;border-radius:10px;}
+.header-user{font-size:12px;color:#aaa;}
+.btn-logout{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:white;padding:6px 13px;border-radius:7px;cursor:pointer;font-size:12px;white-space:nowrap;}
+
+/* EMPLOYEE */
+#employee-view{padding:1rem;max-width:960px;margin:0 auto;}
+.month-selector{background:white;border-radius:12px;padding:1rem 1.2rem;margin-bottom:1rem;display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.month-selector label{font-weight:700;font-size:14px;white-space:nowrap;}
+.month-selector select{padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;outline:none;background:white;cursor:pointer;-webkit-appearance:none;}
+.progress-bar-wrap{background:white;border-radius:12px;padding:1rem 1.2rem;margin-bottom:1rem;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.progress-label{font-size:13px;color:#666;margin-bottom:8px;display:flex;justify-content:space-between;}
+.progress-track{height:10px;background:#eee;border-radius:5px;overflow:hidden;}
+.progress-fill{height:100%;background:linear-gradient(90deg,#1a1a2e,#0f3460);border-radius:5px;transition:width .4s;}
+.table-card{background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.table-card-header{padding:1rem 1.2rem;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;}
+.table-card-header h2{font-size:15px;font-weight:700;}
+.month-badge{background:#eef2ff;color:#1a1a2e;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;}
+.table-scroll{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;}
+thead th{background:#f8f9fa;padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:#666;border-bottom:1px solid #eee;white-space:nowrap;}
+tbody tr{border-bottom:1px solid #f5f5f5;}
+tbody tr:last-child{border-bottom:none;}
+tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
+.row-done{background:#f0fff4;}
+.row-late{background:#fff5f5;}
+.status-cell{display:flex;align-items:center;gap:6px;}
+.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.status-done{background:#38a169;}.status-pending{background:#e2e8f0;}.status-late{background:#e53e3e;}
+.date-input{border:1.5px solid #e0e0e0;border-radius:8px;padding:7px 9px;font-size:13px;outline:none;width:140px;cursor:pointer;-webkit-appearance:none;}
+.date-input:focus{border-color:#1a1a2e;}
+.checkbox-wrap{display:flex;align-items:center;gap:6px;}
+.checkbox-wrap input[type=checkbox]{width:20px;height:20px;cursor:pointer;accent-color:#1a1a2e;}
+.note-input{border:1.5px solid #e0e0e0;border-radius:8px;padding:7px 9px;font-size:13px;outline:none;width:100%;min-width:100px;resize:vertical;direction:rtl;font-family:inherit;}
+.note-input:focus{border-color:#1a1a2e;}
+.dl-badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px;}
+.dl-ok{background:#dcfce7;color:#166534;}
+.dl-late{background:#fee2e2;color:#991b1b;}
+.btn-save{background:#1a1a2e;color:white;border:none;padding:12px 28px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;display:block;margin:1.2rem auto 0;width:100%;max-width:280px;}
+.save-success{text-align:center;color:#38a169;font-size:13px;margin-top:8px;min-height:20px;opacity:0;transition:opacity .3s;}
+.save-success.show{opacity:1;}
+
+/* MASTER */
+#master-view{padding:1rem;max-width:1200px;margin:0 auto;}
+.master-tabs{display:flex;gap:6px;margin-bottom:1.2rem;overflow-x:auto;padding-bottom:2px;}
+.master-tab{padding:9px 16px;border-radius:8px;border:1.5px solid #e0e0e0;background:white;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.master-tab.active{background:#1a1a2e;color:white;border-color:#1a1a2e;}
+.master-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:.8rem;margin-bottom:1.2rem;}
+@media(min-width:600px){.master-stats{grid-template-columns:repeat(5,1fr);}}
+.stat-card{background:white;border-radius:12px;padding:1rem 1.2rem;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.stat-label{font-size:11px;color:#888;font-weight:700;}
+.stat-value{font-size:22px;font-weight:800;color:#1a1a2e;margin-top:2px;}
+.stat-sub{font-size:11px;color:#aaa;}
+.stat-danger .stat-value{color:#e53e3e;}
+.master-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1.2rem;}
+@media(min-width:700px){.master-grid{grid-template-columns:1fr 1fr;}}
+.chart-card{background:white;border-radius:12px;padding:1.2rem;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.chart-card h3{font-size:14px;font-weight:700;margin-bottom:.8rem;}
+.employees-table-card{background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:1.2rem;}
+.employees-table-card h3{padding:.9rem 1.2rem;font-size:14px;font-weight:700;border-bottom:1px solid #f0f0f0;}
+.emp-progress{display:flex;align-items:center;gap:8px;}
+.emp-progress-bar{flex:1;height:6px;background:#eee;border-radius:3px;overflow:hidden;min-width:40px;}
+.emp-progress-fill{height:100%;border-radius:3px;}
+.emp-pct{font-size:12px;font-weight:700;color:#666;min-width:34px;}
+.master-filter-bar{display:flex;align-items:center;gap:.8rem;margin-bottom:1.2rem;background:white;padding:.9rem 1.2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);flex-wrap:wrap;}
+.master-filter-bar label{font-weight:700;font-size:14px;white-space:nowrap;}
+.master-filter-bar select{padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;outline:none;cursor:pointer;-webkit-appearance:none;}
+.live-badge{display:flex;align-items:center;gap:5px;font-size:12px;color:#38a169;font-weight:700;margin-right:auto;}
+.live-dot{width:8px;height:8px;background:#38a169;border-radius:50%;animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.view-btn{background:#eef2ff;color:#1a1a2e;border:none;padding:6px 13px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;}
+.notes-badge{background:#fef9c3;color:#713f12;font-size:11px;font-weight:700;padding:3px 8px;border-radius:10px;}
+.late-badge{background:#fee2e2;color:#991b1b;font-size:11px;font-weight:700;padding:3px 8px;border-radius:10px;}
+.note-text-badge{display:inline-block;background:#fef9c3;color:#713f12;font-size:12px;padding:3px 8px;border-radius:6px;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* PANELS */
+.panel{display:none;}
+.panel-card{background:white;border-radius:12px;padding:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:1rem;}
+.panel-card h3{font-size:16px;font-weight:700;margin-bottom:.4rem;}
+.panel-sub{font-size:13px;color:#888;margin-bottom:1.2rem;}
+.warning-box{background:#fffbeb;border:1px solid #f6d860;border-radius:10px;padding:.9rem 1.1rem;margin-bottom:1.2rem;font-size:13px;color:#7d5d00;}
+.section-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.section-num{width:26px;height:26px;background:#1a1a2e;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}
+.section-input{flex:1;padding:9px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;outline:none;direction:rtl;}
+.section-input:focus{border-color:#1a1a2e;}
+.btn-del-sec{background:#fee2e2;color:#991b1b;border:none;width:30px;height:30px;border-radius:7px;cursor:pointer;font-size:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+.btn-add-sec{background:#f0fff4;color:#166534;border:1.5px dashed #38a169;border-radius:9px;padding:10px;width:100%;cursor:pointer;font-size:14px;font-weight:700;margin-top:.5rem;}
+.emp-manage-row{display:flex;align-items:center;gap:8px;margin-bottom:9px;padding:9px 12px;border:1.5px solid #eee;border-radius:10px;background:#fafafa;flex-wrap:wrap;}
+.emp-manage-num{width:26px;height:26px;background:#1a1a2e;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}
+.emp-manage-name{flex:2;min-width:90px;padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;outline:none;direction:rtl;}
+.emp-manage-pin{width:90px;padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;outline:none;direction:ltr;text-align:center;letter-spacing:2px;}
+.emp-manage-label{font-size:11px;color:#999;white-space:nowrap;}
+.btn-primary{background:#1a1a2e;color:white;border:none;padding:11px 26px;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;margin-top:1rem;}
+.panel-save-msg{color:#38a169;font-size:13px;margin-top:8px;opacity:0;transition:opacity .3s;min-height:18px;}
+.panel-save-msg.show{opacity:1;}
+.pin-input-group{display:flex;flex-direction:column;gap:.8rem;max-width:320px;}
+.pin-field{padding:10px 14px;border:1.5px solid #e0e0e0;border-radius:9px;font-size:15px;outline:none;direction:ltr;letter-spacing:3px;text-align:center;width:100%;}
+.pin-field:focus{border-color:#1a1a2e;}
+.pin-err{color:#e53e3e;font-size:12px;min-height:16px;}
+
+/* SUPER MASTER */
+#supermaster-view{padding:1rem;max-width:1200px;margin:0 auto;}
+.sites-summary{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:1.5rem;}
+@media(min-width:700px){.sites-summary{grid-template-columns:repeat(4,1fr);}}
+.site-summary-card{background:white;border-radius:12px;padding:1.2rem;box-shadow:0 2px 8px rgba(0,0,0,.06);cursor:pointer;transition:box-shadow .2s;}
+.site-summary-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.12);}
+.site-summary-name{font-size:14px;font-weight:700;margin-bottom:.5rem;}
+.site-summary-stat{font-size:12px;color:#666;}
+.site-color{width:10px;height:10px;border-radius:50%;display:inline-block;margin-left:5px;}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:1rem;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:white;border-radius:16px;padding:1.5rem;width:100%;max-width:760px;max-height:88vh;overflow-y:auto;direction:rtl;}
+.modal-box h2{font-size:17px;font-weight:700;margin-bottom:1.2rem;}
+.modal-close{float:left;background:#eee;border:none;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;line-height:30px;text-align:center;}
+
+@media(max-width:560px){
+  thead{display:none;}
+  tbody tr{display:block;padding:.7rem .4rem;border-bottom:1px solid #eee;}
+  tbody td{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;font-size:13px;border:none;}
+  tbody td:before{content:attr(data-label);font-size:11px;color:#888;font-weight:700;margin-left:.5rem;white-space:nowrap;flex-shrink:0;}
+  .date-input{max-width:135px;}
+}
+</style>
+</head>
+<body>
+
+<div id="loading-overlay"><div class="spinner"></div><div class="loading-text">מתחבר...</div></div>
+
+<!-- SITE PICKER -->
+<div id="site-picker" style="display:none;">
+  <div class="picker-card">
+    <div class="picker-logo">
+      <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></div>
+      <h1>מערכת דיווח עובדים</h1>
+      <p>בחר מקום עבודה</p>
+    </div>
+    <div class="sites-grid" id="sites-grid"></div>
+    <button class="supermaster-btn" onclick="enterSupermaster()">כניסת מנהל-על 🔐</button>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="login-screen" style="display:none;">
+  <div class="login-card">
+    <button class="login-back" onclick="goBack()">← חזור</button>
+    <div class="login-logo">
+      <div class="icon" id="login-site-icon" style="font-size:24px;"></div>
+      <h1 id="login-site-name">מקום עבודה</h1>
+      <div class="site-label" id="login-site-label">הכנס פרטים לכניסה</div>
+    </div>
+    <div class="form-group">
+      <label>בחר עובד</label>
+      <select id="login-user"><option value="">-- בחר --</option></select>
+    </div>
+    <div class="form-group">
+      <label>קוד כניסה (4 ספרות)</label>
+      <input type="password" id="login-pin" maxlength="4" placeholder="הכנס קוד" inputmode="numeric" pattern="[0-9]*">
+    </div>
+    <button class="btn-login" onclick="doLogin()">כניסה</button>
+    <div class="error-msg" id="login-error"></div>
+  </div>
+</div>
+
+<!-- APP (employee + local master) -->
+<div id="app">
+  <div class="header">
+    <div class="header-left">
+      <div class="header-title">מערכת דיווח</div>
+      <span class="header-site" id="header-site-name"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:.4rem;">
+      <span class="header-user" id="header-user-name"></span>
+      <button class="btn-logout" onclick="doLogout()">יציאה</button>
+    </div>
+  </div>
+
+  <!-- EMPLOYEE -->
+  <div id="employee-view">
+    <div class="month-selector">
+      <label>שנה:</label>
+      <select id="emp-year" onchange="renderEmployeeTable()" style="width:86px;"></select>
+      <label>חודש:</label>
+      <select id="emp-month" onchange="renderEmployeeTable()"></select>
+    </div>
+    <div class="progress-bar-wrap">
+      <div class="progress-label"><span id="progress-text">התקדמות</span><span id="progress-pct">0%</span></div>
+      <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+    </div>
+    <div class="table-card">
+      <div class="table-card-header">
+        <h2 id="emp-table-title">פירוט סעיפים</h2>
+        <span class="month-badge" id="emp-month-badge"></span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>#</th><th>שם סעיף</th><th>דד-ליין</th><th>תאריך ביצוע</th><th>סטטוס</th><th>הערות</th></tr></thead>
+          <tbody id="emp-table-body"></tbody>
+        </table>
+      </div>
+      <div style="padding:1rem 1.2rem 1.5rem;">
+        <button class="btn-save" onclick="saveEmployeeData()">שמור נתונים</button>
+        <div class="save-success" id="save-msg">הנתונים נשמרו!</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOCAL MASTER -->
+  <div id="master-view" style="display:none;">
+    <div class="master-tabs">
+      <button class="master-tab active" onclick="showMasterTab('dashboard')">לוח בקרה</button>
+      <button class="master-tab" onclick="showMasterTab('deadlines')">דד-ליינים</button>
+      <button class="master-tab" onclick="showMasterTab('sections')">סעיפים</button>
+      <button class="master-tab" onclick="showMasterTab('employees')">עובדים</button>
+      <button class="master-tab" onclick="showMasterTab('settings')">הגדרות</button>
+    </div>
+    <div id="dashboard-panel">
+      <div class="master-filter-bar">
+        <label>שנה:</label>
+        <select id="m-year" onchange="renderMasterView()" style="width:82px;"></select>
+        <label>חודש:</label>
+        <select id="m-month" onchange="renderMasterView()"></select>
+        <div class="live-badge"><div class="live-dot"></div>עדכון בזמן אמת</div>
+      </div>
+      <div class="master-stats">
+        <div class="stat-card"><div class="stat-label">עובדים</div><div class="stat-value" id="stat-employees">0</div></div>
+        <div class="stat-card"><div class="stat-label">100%</div><div class="stat-value" id="stat-complete">0</div></div>
+        <div class="stat-card"><div class="stat-label">סעיפים</div><div class="stat-value" id="stat-items">0</div><div class="stat-sub">מתוך <span id="stat-total-items">0</span></div></div>
+        <div class="stat-card"><div class="stat-label">ממוצע</div><div class="stat-value" id="stat-avg">0%</div></div>
+        <div class="stat-card stat-danger"><div class="stat-label">באיחור</div><div class="stat-value" id="stat-late">0</div></div>
+      </div>
+      <div class="master-grid">
+        <div class="chart-card"><h3>התקדמות לפי עובד</h3><canvas id="barChart"></canvas></div>
+        <div class="chart-card"><h3>התפלגות</h3><canvas id="pieChart"></canvas></div>
+      </div>
+      <div class="employees-table-card">
+        <h3>סיכום עובדים</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>עובד</th><th>מולאו</th><th>התקדמות</th><th>איחורים</th><th>הערות</th><th>פרטים</th></tr></thead>
+            <tbody id="master-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div id="deadlines-panel" class="panel">
+      <div class="panel-card">
+        <h3>דד-ליינים לסעיפים</h3>
+        <p class="panel-sub">לפי חודש בלבד — חודשים אחרים לא מושפעים.</p>
+        <div style="display:flex;align-items:center;gap:.8rem;margin-bottom:1.2rem;flex-wrap:wrap;">
+          <label style="font-weight:700;font-size:14px;">חודש לעריכה:</label>
+          <select id="dl-year" onchange="buildDeadlineEditor()" style="padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;outline:none;-webkit-appearance:none;width:86px;"></select>
+          <select id="dl-month" onchange="buildDeadlineEditor()" style="padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;outline:none;-webkit-appearance:none;"></select>
+          <span id="deadline-month-info" style="font-size:13px;font-weight:700;background:#eef2ff;padding:4px 12px;border-radius:20px;color:#1a1a2e;"></span>
+        </div>
+        <div id="deadline-inputs"></div>
+        <button class="btn-primary" onclick="saveDeadlines()">שמור דד-ליינים</button>
+        <div class="panel-save-msg" id="deadline-save-msg">נשמר!</div>
+      </div>
+    </div>
+    <div id="sections-panel" class="panel">
+      <div class="panel-card">
+        <h3>ניהול סעיפים</h3>
+        <p class="panel-sub">הוסף, מחק או שנה שם סעיפים. השינויים ישפיעו על כל העובדים במקום זה.</p>
+        <div class="warning-box">מחיקת סעיף לא מוחקת נתונים היסטוריים שנשמרו כבר.</div>
+        <div id="section-inputs"></div>
+        <button class="btn-add-sec" onclick="addSection()">+ הוסף סעיף</button>
+        <button class="btn-primary" onclick="saveSectionNames()">שמור שמות</button>
+        <div class="panel-save-msg" id="sections-save-msg">נשמר!</div>
+      </div>
+    </div>
+    <div id="employees-panel" class="panel">
+      <div class="panel-card">
+        <h3>ניהול עובדים</h3>
+        <p class="panel-sub">שנה שם וקוד לכל עובד.</p>
+        <div id="emp-manage-list"></div>
+        <button class="btn-primary" onclick="saveEmployeeManage()">שמור שינויים</button>
+        <div class="panel-save-msg" id="emp-manage-msg">נשמר!</div>
+      </div>
+    </div>
+    <div id="settings-panel" class="panel">
+      <div class="panel-card">
+        <h3>שינוי סיסמת מנהל מקומי</h3>
+        <div class="pin-input-group">
+          <div><label style="font-size:13px;font-weight:600;color:#555;margin-bottom:3px;display:block;">קוד נוכחי</label><input type="password" class="pin-field" id="lm-cur-pin" maxlength="4" placeholder="····" inputmode="numeric"></div>
+          <div><label style="font-size:13px;font-weight:600;color:#555;margin-bottom:3px;display:block;">קוד חדש</label><input type="password" class="pin-field" id="lm-new-pin" maxlength="4" placeholder="····" inputmode="numeric"></div>
+          <div><label style="font-size:13px;font-weight:600;color:#555;margin-bottom:3px;display:block;">אשר קוד חדש</label><input type="password" class="pin-field" id="lm-new-pin2" maxlength="4" placeholder="····" inputmode="numeric"></div>
+          <button class="btn-primary" onclick="saveLocalMasterPin()">שנה קוד</button>
+          <div class="pin-err" id="lm-pin-err"></div>
+          <div class="panel-save-msg" id="lm-pin-msg">הקוד עודכן!</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SUPER MASTER -->
+<div id="supermaster-app" style="display:none;">
+  <div class="header">
+    <div class="header-left">
+      <div class="header-title">מנהל-על</div>
+      <span class="header-site" style="background:rgba(255,215,0,.2);color:#ffd700;">כל המקומות</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:.4rem;">
+      <button class="btn-logout" onclick="doLogout()">יציאה</button>
+    </div>
+  </div>
+  <div id="supermaster-view">
+    <div class="master-filter-bar">
+      <label>שנה:</label>
+      <select id="sm-year" onchange="renderSupermasterView()" style="width:82px;"></select>
+      <label>חודש:</label>
+      <select id="sm-month" onchange="renderSupermasterView()"></select>
+      <div class="live-badge"><div class="live-dot"></div>כל המקומות</div>
+    </div>
+    <div class="sites-summary" id="sites-summary-cards"></div>
+    <div class="employees-table-card">
+      <h3 id="sm-detail-title" style="padding:.9rem 1.2rem;font-size:14px;font-weight:700;border-bottom:1px solid #f0f0f0;">סיכום כולל</h3>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>מקום עבודה</th><th>עובדים</th><th>מולאו</th><th>ממוצע</th><th>באיחור</th></tr></thead>
+          <tbody id="sm-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div style="background:white;border-radius:12px;padding:1.2rem;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:1.2rem;">
+      <h3 style="font-size:14px;font-weight:700;margin-bottom:.8rem;">השוואת מקומות עבודה</h3>
+      <canvas id="smChart" height="140"></canvas>
+    </div>
+    <!-- Super master settings -->
+    <div class="panel-card">
+      <h3>הגדרות מנהל-על</h3>
+      <div class="pin-input-group" style="margin-top:1rem;">
+        <div><label style="font-size:13px;font-weight:600;color:#555;margin-bottom:3px;display:block;">קוד נוכחי</label><input type="password" class="pin-field" id="sm-cur-pin" maxlength="4" placeholder="····" inputmode="numeric"></div>
+        <div><label style="font-size:13px;font-weight:600;color:#555;margin-bottom:3px;display:block;">קוד חדש</label><input type="password" class="pin-field" id="sm-new-pin" maxlength="4" placeholder="····" inputmode="numeric"></div>
+        <div><label style="font-size:13px;font-weight:600;color:#555;margin-bottom:3px;display:block;">אשר</label><input type="password" class="pin-field" id="sm-new-pin2" maxlength="4" placeholder="····" inputmode="numeric"></div>
+        <button class="btn-primary" onclick="saveSupermasterPin()">שנה קוד</button>
+        <div class="pin-err" id="sm-pin-err"></div>
+        <div class="panel-save-msg" id="sm-pin-msg">הקוד עודכן!</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeDetail()">✕</button>
+    <h2 id="detail-title">פרטי עובד</h2>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>שם סעיף</th><th>דד-ליין</th><th>תאריך ביצוע</th><th>סטטוס</th><th>הערות</th></tr></thead>
+        <tbody id="detail-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// ⬇️  הכנס כאן את פרטי ה-Firebase שלך
+// ============================================================
+const firebaseConfig = {
+  apiKey:            "AIzaSyDyTN8H7FwyhA9wjsEH97fwJB2TGJgEfpA",
+  authDomain:        "work-system-73906.firebaseapp.com",
+  databaseURL:       "https://work-system-73906-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "work-system-73906",
+  storageBucket:     "work-system-73906.firebasestorage.app",
+  messagingSenderId: "227399680422",
+  appId:             "1:227399680422:web:4911726e11a17572b40f67"
+};
+// ============================================================
+
+// ===== SITES CONFIG =====
+// ערוך את מקומות העבודה כאן
+const SITES_CONFIG = [
+  { id:'site1', name:'מקום עבודה 1', emoji:'🏢', color:'#3182ce' },
+  { id:'site2', name:'מקום עבודה 2', emoji:'🏪', color:'#38a169' },
+  { id:'site3', name:'מקום עבודה 3', emoji:'🏭', color:'#e6a817' },
+];
+
+const DEFAULT_EMPLOYEES = Array.from({length:18},(_,i)=>({id:'emp'+(i+1),name:'עובד '+(i+1),pin:(''+(i+1)).padStart(4,'0')}));
+const DEFAULT_SECTIONS  = ['סעיף 1','סעיף 2','סעיף 3','סעיף 4','סעיף 5','סעיף 6','סעיף 7','סעיף 8','סעיף 9','סעיף 10'];
+const DEFAULT_LOCAL_MASTER = {pin:'1234'};
+const DEFAULT_SUPERMASTER  = {pin:'9999'};
+const MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+const YEARS  = [2026,2027,2028,2029,2030];
+
+let app=null,db=null;
+let currentUser=null,currentSite=null,currentRole=null; // role: emp | localmaster | supermaster
+let barChartInst=null,pieChartInst=null,smChartInst=null;
+let masterUnsub=null;
+let cachedEmployees={},cachedSections={},cachedLM={};
+
+// ===== FIREBASE =====
+try{app=firebase.initializeApp(firebaseConfig);db=firebase.database();}catch(e){}
+
+function siteRef(siteId,path){return 'sites/'+siteId+(path?'/'+path:'');}
+function dataKey(siteId,empId,year,month){return siteRef(siteId,'data/'+empId+'/y'+year+'_m'+month);}
+function dlKey(siteId,year,month){return siteRef(siteId,'deadlines/y'+year+'_m'+month);}
+
+async function fbGet(path){const s=await db.ref(path).once('value');return s.exists()?s.val():null;}
+async function fbSet(path,val){await db.ref(path).set(val);}
+function fbListen(path,cb){return db.ref(path).on('value',s=>cb(s.exists()?s.val():null));}
+function showLoading(v){document.getElementById('loading-overlay').style.display=v?'flex':'none';}
+function showSaveMsg(id){const m=document.getElementById(id);if(m){m.classList.add('show');setTimeout(()=>m.classList.remove('show'),2500);}}
+function formatDate(d){if(!d)return'';const[y,m,day]=d.split('-');return day+'/'+m+'/'+y;}
+
+// ===== BOOT =====
+var _started=false;
+var _bootInterval=setInterval(function(){
+  if(_started||!db||!document.getElementById('site-picker'))return;
+  _started=true;clearInterval(_bootInterval);
+  initApp();
+},200);
+
+async function initApp(){
+  showLoading(true);
+  try{
+    // init each site defaults
+    for(const site of SITES_CONFIG){
+      const cfg=await fbGet(siteRef(site.id,'config'))||{};
+      if(!cfg.employees) await fbSet(siteRef(site.id,'config/employees'),DEFAULT_EMPLOYEES);
+      if(!cfg.sections)  await fbSet(siteRef(site.id,'config/sections'),DEFAULT_SECTIONS);
+      if(!cfg.localmaster) await fbSet(siteRef(site.id,'config/localmaster'),DEFAULT_LOCAL_MASTER);
+    }
+    const sm=await fbGet('supermaster');
+    if(!sm) await fbSet('supermaster',DEFAULT_SUPERMASTER);
+  }catch(e){console.error('init error',e);}
+  showLoading(false);
+  showSitePicker();
+}
+
+// ===== SITE PICKER =====
+function showSitePicker(){
+  document.getElementById('site-picker').style.display='flex';
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='none';
+  document.getElementById('supermaster-app').style.display='none';
+  const grid=document.getElementById('sites-grid');
+  grid.innerHTML='';
+  SITES_CONFIG.forEach(site=>{
+    const btn=document.createElement('button');
+    btn.className='site-btn';
+    btn.innerHTML=`<div class="site-icon" style="background:${site.color}22;">${site.emoji}</div><div class="site-name">${site.name}</div>`;
+    btn.onclick=()=>showLogin(site);
+    grid.appendChild(btn);
+  });
+}
+
+function showLogin(site){
+  currentSite=site;
+  document.getElementById('site-picker').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('login-site-icon').textContent=site.emoji;
+  document.getElementById('login-site-name').textContent=site.name;
+  document.getElementById('login-site-label').textContent='הכנס פרטים לכניסה';
+  document.getElementById('login-pin').value='';
+  document.getElementById('login-error').textContent='';
+  buildLoginSelectForSite(site.id);
+}
+
+function goBack(){showSitePicker();}
+
+async function buildLoginSelectForSite(siteId){
+  const emps=await getEmployees(siteId);
+  const sel=document.getElementById('login-user');
+  sel.innerHTML='<option value="">-- בחר --</option>';
+  emps.forEach(e=>{const o=document.createElement('option');o.value=e.id;o.textContent=e.name;sel.appendChild(o);});
+  const m=document.createElement('option');m.value='localmaster';m.textContent='מנהל מקומי';sel.appendChild(m);
+}
+
+window.doLogin=async function(){
+  const uid=document.getElementById('login-user').value;
+  const pin=document.getElementById('login-pin').value.trim();
+  const err=document.getElementById('login-error');
+  err.textContent='';
+  if(!uid){err.textContent='יש לבחור עובד';return;}
+  if(!pin){err.textContent='יש להזין קוד';return;}
+  showLoading(true);
+  try{
+    if(uid==='localmaster'){
+      const lm=await fbGet(siteRef(currentSite.id,'config/localmaster'))||DEFAULT_LOCAL_MASTER;
+      if(pin!==(lm.pin||'1234')){err.textContent='קוד שגוי';showLoading(false);return;}
+      currentUser={id:'localmaster',name:'מנהל מקומי'};
+      currentRole='localmaster';
+      await enterLocalMaster();
+    } else {
+      const emps=await getEmployees(currentSite.id);
+      const emp=emps.find(e=>e.id===uid);
+      if(!emp||pin!==emp.pin){err.textContent='קוד שגוי';showLoading(false);return;}
+      currentUser=emp;currentRole='emp';
+      await enterEmployee();
+    }
+  }catch(e){err.textContent='שגיאת חיבור';}
+  showLoading(false);
+};
+document.getElementById('login-pin').addEventListener('keydown',e=>{if(e.key==='Enter')window.doLogin();});
+
+async function enterSupermaster(){
+  const pin=prompt('קוד מנהל-על:');
+  if(!pin)return;
+  showLoading(true);
+  const sm=await fbGet('supermaster')||DEFAULT_SUPERMASTER;
+  showLoading(false);
+  if(pin!==sm.pin){alert('קוד שגוי');return;}
+  currentRole='supermaster';
+  document.getElementById('site-picker').style.display='none';
+  document.getElementById('supermaster-app').style.display='block';
+  buildYearSelect('sm-year');buildMonthSelect('sm-month');
+  renderSupermasterView();
+}
+
+window.doLogout=function(){
+  if(masterUnsub){masterUnsub();masterUnsub=null;}
+  cachedEmployees={};cachedSections={};cachedLM={};
+  currentUser=null;currentSite=null;currentRole=null;
+  document.getElementById('app').style.display='none';
+  document.getElementById('supermaster-app').style.display='none';
+  showSitePicker();
+};
+
+// ===== HELPERS =====
+async function getEmployees(siteId){
+  if(cachedEmployees[siteId]) return cachedEmployees[siteId];
+  cachedEmployees[siteId]=await fbGet(siteRef(siteId,'config/employees'))||DEFAULT_EMPLOYEES;
+  return cachedEmployees[siteId];
+}
+async function getSections(siteId){
+  if(cachedSections[siteId]) return cachedSections[siteId];
+  cachedSections[siteId]=await fbGet(siteRef(siteId,'config/sections'))||DEFAULT_SECTIONS;
+  return cachedSections[siteId];
+}
+
+function buildYearSelect(id){
+  const sel=document.getElementById(id);if(!sel)return;sel.innerHTML='';
+  YEARS.forEach(y=>{const o=document.createElement('option');o.value=y;o.textContent=y;sel.appendChild(o);});
+  sel.value=YEARS.includes(new Date().getFullYear())?new Date().getFullYear():YEARS[0];
+}
+function buildMonthSelect(id){
+  const sel=document.getElementById(id);if(!sel)return;sel.innerHTML='';
+  MONTHS.forEach((m,i)=>{const o=document.createElement('option');o.value=i;o.textContent=m;sel.appendChild(o);});
+  sel.value=new Date().getMonth();
+}
+
+// ===== EMPLOYEE VIEW =====
+async function enterEmployee(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('employee-view').style.display='block';
+  document.getElementById('master-view').style.display='none';
+  document.getElementById('header-site-name').textContent=currentSite.name;
+  document.getElementById('header-user-name').textContent=currentUser.name;
+  buildYearSelect('emp-year');buildMonthSelect('emp-month');
+  await renderEmployeeTable();
+}
+
+window.renderEmployeeTable=async function(){
+  const year=document.getElementById('emp-year').value;
+  const month=parseInt(document.getElementById('emp-month').value);
+  const sections=await getSections(currentSite.id);
+  const saved=await fbGet(dataKey(currentSite.id,currentUser.id,year,month))||{};
+  const deadlines=await fbGet(dlKey(currentSite.id,year,month))||{};
+  const today=new Date().toISOString().slice(0,10);
+  document.getElementById('emp-table-title').textContent='פירוט — '+currentUser.name;
+  document.getElementById('emp-month-badge').textContent=MONTHS[month]+' '+year;
+  const tbody=document.getElementById('emp-table-body');tbody.innerHTML='';
+  const rows=sections.map((name,i)=>{const s=saved['s'+(i+1)]||{};return{name,done:s.done||false,date:s.date||'',note:s.note||''};});
+  rows.forEach((row,i)=>{
+    const dl=deadlines['s'+(i+1)]||'';
+    const isLate=dl&&!row.done&&today>dl;
+    const tr=document.createElement('tr');
+    if(row.done)tr.className='row-done';else if(isLate)tr.className='row-late';
+    tr.innerHTML='<td data-label="#" style="color:#888;font-size:13px;">'+(i+1)+'</td>'+
+      '<td data-label="שם סעיף" style="font-weight:600;">'+row.name+'</td>'+
+      '<td data-label="דד-ליין">'+(dl?'<span class="dl-badge '+(isLate?'dl-late':'dl-ok')+'">'+formatDate(dl)+'</span>':'<span style="color:#bbb;font-size:11px;">אין</span>')+'</td>'+
+      '<td data-label="תאריך ביצוע"><input type="date" class="date-input" value="'+row.date+'" onchange="onDateChange('+i+',this.value)"></td>'+
+      '<td data-label="סטטוס"><div class="checkbox-wrap"><input type="checkbox" '+(row.done?'checked':'')+' onchange="onCheck('+i+',this.checked)">'+
+      '<div class="status-cell"><div class="status-dot '+(row.done?'status-done':isLate?'status-late':'status-pending')+'"></div>'+
+      '<span style="font-size:12px;">'+(row.done?'בוצע':isLate?'באיחור':'ממתין')+'</span></div></div></td>'+
+      '<td data-label="הערות"><textarea class="note-input" rows="1" placeholder="הערה..." onchange="onNote('+i+',this.value)">'+row.note+'</textarea></td>';
+    tbody.appendChild(tr);
+  });
+  const done=rows.filter(r=>r.done).length;
+  const pct=rows.length?Math.round(done/rows.length*100):0;
+  document.getElementById('progress-text').textContent=done+' מתוך '+rows.length+' סעיפים';
+  document.getElementById('progress-pct').textContent=pct+'%';
+  document.getElementById('progress-fill').style.width=pct+'%';
+};
+
+window.onDateChange=async function(idx,val){
+  const y=document.getElementById('emp-year').value,m=parseInt(document.getElementById('emp-month').value);
+  await db.ref(dataKey(currentSite.id,currentUser.id,y,m)+'/s'+(idx+1)).update({date:val});
+};
+window.onCheck=async function(idx,checked){
+  const y=document.getElementById('emp-year').value,m=parseInt(document.getElementById('emp-month').value);
+  await db.ref(dataKey(currentSite.id,currentUser.id,y,m)+'/s'+(idx+1)).update({done:checked});
+  await window.renderEmployeeTable();
+};
+window.onNote=async function(idx,val){
+  const y=document.getElementById('emp-year').value,m=parseInt(document.getElementById('emp-month').value);
+  await db.ref(dataKey(currentSite.id,currentUser.id,y,m)+'/s'+(idx+1)).update({note:val});
+};
+window.saveEmployeeData=async function(){
+  showLoading(true);
+  const y=document.getElementById('emp-year').value,m=parseInt(document.getElementById('emp-month').value);
+  const sections=await getSections(currentSite.id);
+  const tbody=document.getElementById('emp-table-body');
+  const dates=tbody.querySelectorAll('input[type=date]');
+  const checks=tbody.querySelectorAll('input[type=checkbox]');
+  const notes=tbody.querySelectorAll('textarea');
+  const updates={};
+  sections.forEach((_,i)=>{updates[dataKey(currentSite.id,currentUser.id,y,m)+'/s'+(i+1)]={done:checks[i]?checks[i].checked:false,date:dates[i]?dates[i].value:'',note:notes[i]?notes[i].value:''};});
+  await db.ref().update(updates);
+  showLoading(false);
+  await window.renderEmployeeTable();
+  const msg=document.getElementById('save-msg');msg.classList.add('show');setTimeout(()=>msg.classList.remove('show'),2500);
+};
+
+// ===== LOCAL MASTER =====
+async function enterLocalMaster(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('employee-view').style.display='none';
+  document.getElementById('master-view').style.display='block';
+  document.getElementById('header-site-name').textContent=currentSite.name;
+  document.getElementById('header-user-name').textContent='מנהל מקומי';
+  buildYearSelect('m-year');buildMonthSelect('m-month');
+  await renderMasterView();
+  await buildSectionEditor();
+  await buildEmployeeManager();
+  await buildDeadlineEditor();
+  if(masterUnsub)masterUnsub();
+  masterUnsub=fbListen(siteRef(currentSite.id,'data'),async()=>{await renderMasterView();});
+}
+
+window.showMasterTab=function(tab){
+  ['dashboard','deadlines','sections','employees','settings'].forEach(p=>{
+    document.getElementById(p+'-panel').style.display=p===tab?'block':'none';
+  });
+  document.querySelectorAll('.master-tab').forEach((t,i)=>{
+    t.classList.toggle('active',['dashboard','deadlines','sections','employees','settings'][i]===tab);
+  });
+  if(tab==='sections')buildSectionEditor();
+  if(tab==='employees')buildEmployeeManager();
+  if(tab==='deadlines')buildDeadlineEditor();
+  if(tab==='dashboard')renderMasterView();
+};
+
+window.renderMasterView=async function(){
+  const y=document.getElementById('m-year').value,m=parseInt(document.getElementById('m-month').value);
+  const emps=await getEmployees(currentSite.id);
+  const sections=await getSections(currentSite.id);
+  const deadlines=await fbGet(dlKey(currentSite.id,y,m))||{};
+  const allData=await fbGet(siteRef(currentSite.id,'data'))||{};
+  const today=new Date().toISOString().slice(0,10);
+  const empData=emps.map(emp=>{
+    const md=(allData[emp.id]&&allData[emp.id]['y'+y+'_m'+m])||{};
+    const rows=sections.map((name,i)=>{const s=md['s'+(i+1)]||{};const dl=deadlines['s'+(i+1)]||'';return{done:s.done||false,isLate:dl&&!s.done&&today>dl,note:s.note||''};});
+    const done=rows.filter(r=>r.done).length;
+    return{emp,done,total:rows.length,pct:Math.round(done/rows.length*100),late:rows.filter(r=>r.isLate).length,notes:rows.filter(r=>r.note&&r.note.trim()).length,rows};
+  });
+  document.getElementById('stat-employees').textContent=emps.length;
+  document.getElementById('stat-complete').textContent=empData.filter(d=>d.pct===100).length;
+  document.getElementById('stat-items').textContent=empData.reduce((s,d)=>s+d.done,0);
+  document.getElementById('stat-total-items').textContent=empData.reduce((s,d)=>s+d.total,0);
+  document.getElementById('stat-avg').textContent=Math.round(empData.reduce((s,d)=>s+d.pct,0)/empData.length)+'%';
+  document.getElementById('stat-late').textContent=empData.reduce((s,d)=>s+d.late,0);
+
+  if(barChartInst)barChartInst.destroy();
+  barChartInst=new Chart(document.getElementById('barChart').getContext('2d'),{type:'bar',data:{labels:empData.map(d=>d.emp.name),datasets:[{data:empData.map(d=>d.pct),backgroundColor:empData.map(d=>d.late>0?'#e53e3e':d.pct===100?'#38a169':d.pct>=50?'#3182ce':d.pct>0?'#e6a817':'#e2e8f0'),borderRadius:4}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%',font:{size:10}}},x:{ticks:{font:{size:9}}}}}});
+  const cats=[empData.filter(d=>d.pct===100).length,empData.filter(d=>d.late>0).length,empData.filter(d=>d.pct>=50&&d.pct<100&&!d.late).length,empData.filter(d=>d.pct===0).length];
+  if(pieChartInst)pieChartInst.destroy();
+  pieChartInst=new Chart(document.getElementById('pieChart').getContext('2d'),{type:'doughnut',data:{labels:['100%','באיחור','50-99%','לא התחיל'],datasets:[{data:cats,backgroundColor:['#38a169','#e53e3e','#3182ce','#e2e8f0'],borderWidth:0}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}}}}});
+
+  const tbody=document.getElementById('master-table-body');tbody.innerHTML='';
+  empData.forEach(d=>{
+    const color=d.late>0?'#e53e3e':d.pct===100?'#38a169':d.pct>=50?'#3182ce':d.pct>0?'#e6a817':'#ccc';
+    const tr=document.createElement('tr');
+    if(d.late>0)tr.style.background='#fff5f5';
+    tr.innerHTML='<td style="font-weight:700;">'+d.emp.name+'</td>'+
+      '<td style="color:#666;font-size:12px;">'+d.done+'/'+d.total+'</td>'+
+      '<td><div class="emp-progress"><div class="emp-progress-bar"><div class="emp-progress-fill" style="width:'+d.pct+'%;background:'+color+';"></div></div><span class="emp-pct">'+d.pct+'%</span></div></td>'+
+      '<td>'+(d.late>0?'<span class="late-badge">'+d.late+'</span>':'—')+'</td>'+
+      '<td>'+(d.notes>0?'<span class="notes-badge">'+d.notes+'</span>':'—')+'</td>'+
+      '<td><button class="view-btn" onclick="showDetail(\''+d.emp.id+'\',\''+d.emp.name+'\',\''+y+'\','+m+')">צפה</button></td>';
+    tbody.appendChild(tr);
+  });
+};
+
+// SECTIONS EDITOR with add/delete
+async function buildSectionEditor(){
+  const names=await getSections(currentSite.id);
+  renderSectionInputs(names);
+}
+function renderSectionInputs(names){
+  const c=document.getElementById('section-inputs');c.innerHTML='';
+  names.forEach((name,i)=>{
+    const div=document.createElement('div');div.className='section-row';
+    div.innerHTML='<div class="section-num">'+(i+1)+'</div>'+
+      '<input class="section-input" type="text" value="'+name+'" id="sec-input-'+i+'">'+
+      '<button class="btn-del-sec" onclick="deleteSection('+i+')" title="מחק">×</button>';
+    c.appendChild(div);
+  });
+}
+window.addSection=async function(){
+  const names=getCurrentSectionNames();
+  names.push('סעיף '+(names.length+1));
+  renderSectionInputs(names);
+};
+window.deleteSection=async function(idx){
+  const names=getCurrentSectionNames();
+  if(names.length<=1){alert('חייב להיות לפחות סעיף אחד');return;}
+  if(!confirm('למחוק את "'+names[idx]+'"?'))return;
+  names.splice(idx,1);
+  renderSectionInputs(names);
+};
+function getCurrentSectionNames(){
+  const names=[];
+  let i=0;
+  while(document.getElementById('sec-input-'+i)){
+    names.push(document.getElementById('sec-input-'+i).value.trim()||'סעיף '+(i+1));
+    i++;
+  }
+  return names;
+}
+window.saveSectionNames=async function(){
+  const names=getCurrentSectionNames();
+  showLoading(true);
+  await fbSet(siteRef(currentSite.id,'config/sections'),names);
+  cachedSections[currentSite.id]=names;
+  showLoading(false);
+  showSaveMsg('sections-save-msg');
+  await renderMasterView();
+};
+
+// DEADLINES
+async function buildDeadlineEditor(){
+  const dlYear=document.getElementById('dl-year');
+  const dlMonth=document.getElementById('dl-month');
+  if(!dlYear.options.length){buildYearSelect('dl-year');}
+  if(!dlMonth.options.length){buildMonthSelect('dl-month');}
+  const y=dlYear.value,m=parseInt(dlMonth.value);
+  const sections=await getSections(currentSite.id);
+  const deadlines=await fbGet(dlKey(currentSite.id,y,m))||{};
+  const c=document.getElementById('deadline-inputs');c.innerHTML='';
+  const info=document.getElementById('deadline-month-info');
+  if(info)info.textContent=MONTHS[m]+' '+y;
+  sections.forEach((name,i)=>{
+    const div=document.createElement('div');div.className='section-row';
+    div.innerHTML='<div class="section-num">'+(i+1)+'</div>'+
+      '<span style="flex:1;font-size:14px;font-weight:600;">'+name+'</span>'+
+      '<input type="date" class="date-input" value="'+(deadlines['s'+(i+1)]||'')+'" id="dl-input-'+i+'" style="width:150px;">';
+    c.appendChild(div);
+  });
+}
+window.buildDeadlineEditor=buildDeadlineEditor;
+window.saveDeadlines=async function(){
+  const y=document.getElementById('dl-year').value,m=parseInt(document.getElementById('dl-month').value);
+  const sections=await getSections(currentSite.id);
+  const dl={};
+  sections.forEach((_,i)=>{const inp=document.getElementById('dl-input-'+i);if(inp&&inp.value)dl['s'+(i+1)]=inp.value;});
+  showLoading(true);
+  await fbSet(dlKey(currentSite.id,y,m),dl);
+  showLoading(false);
+  showSaveMsg('deadline-save-msg');
+};
+
+// EMPLOYEES MANAGER
+async function buildEmployeeManager(){
+  const emps=await getEmployees(currentSite.id);
+  const c=document.getElementById('emp-manage-list');c.innerHTML='';
+  emps.forEach((emp,i)=>{
+    const div=document.createElement('div');div.className='emp-manage-row';
+    div.innerHTML='<div class="emp-manage-num">'+(i+1)+'</div>'+
+      '<div style="display:flex;flex-direction:column;flex:1;gap:2px;min-width:80px;"><span class="emp-manage-label">שם</span>'+
+      '<input class="emp-manage-name" type="text" value="'+emp.name+'" id="en-'+i+'"></div>'+
+      '<div style="display:flex;flex-direction:column;gap:2px;"><span class="emp-manage-label">קוד</span>'+
+      '<input class="emp-manage-pin" type="text" value="'+emp.pin+'" id="ep-'+i+'" maxlength="4" inputmode="numeric"></div>';
+    c.appendChild(div);
+  });
+}
+window.saveEmployeeManage=async function(){
+  const emps=await getEmployees(currentSite.id);
+  let err=[];
+  const updated=emps.map((emp,i)=>{
+    const n=document.getElementById('en-'+i);const p=document.getElementById('ep-'+i);
+    const nm=n?n.value.trim():emp.name;const pn=p?p.value.trim():emp.pin;
+    if(!nm)err.push('שם עובד '+(i+1)+' ריק');
+    if(!/^\d{4}$/.test(pn)){if(p)p.style.borderColor='#e53e3e';err.push('קוד עובד '+(i+1)+' שגוי');}
+    else if(p)p.style.borderColor='#e0e0e0';
+    return{...emp,name:nm,pin:pn};
+  });
+  if(err.length){alert(err.join('\n'));return;}
+  showLoading(true);
+  await fbSet(siteRef(currentSite.id,'config/employees'),updated);
+  cachedEmployees[currentSite.id]=updated;
+  showLoading(false);
+  showSaveMsg('emp-manage-msg');
+};
+
+// LOCAL MASTER PIN
+window.saveLocalMasterPin=async function(){
+  const cur=document.getElementById('lm-cur-pin').value.trim();
+  const nw=document.getElementById('lm-new-pin').value.trim();
+  const nw2=document.getElementById('lm-new-pin2').value.trim();
+  const err=document.getElementById('lm-pin-err');err.textContent='';
+  const lm=await fbGet(siteRef(currentSite.id,'config/localmaster'))||DEFAULT_LOCAL_MASTER;
+  if(cur!==(lm.pin||'1234')){err.textContent='קוד נוכחי שגוי';return;}
+  if(!/^\d{4}$/.test(nw)){err.textContent='קוד חדש חייב להיות 4 ספרות';return;}
+  if(nw!==nw2){err.textContent='הקודים לא תואמים';return;}
+  showLoading(true);
+  await fbSet(siteRef(currentSite.id,'config/localmaster'),{pin:nw});
+  showLoading(false);
+  ['lm-cur-pin','lm-new-pin','lm-new-pin2'].forEach(id=>document.getElementById(id).value='');
+  showSaveMsg('lm-pin-msg');
+};
+
+// DETAIL MODAL
+window.showDetail=async function(empId,empName,year,month){
+  const sections=await getSections(currentSite.id);
+  const saved=await fbGet(dataKey(currentSite.id,empId,year,month))||{};
+  const deadlines=await fbGet(dlKey(currentSite.id,year,month))||{};
+  const today=new Date().toISOString().slice(0,10);
+  document.getElementById('detail-title').textContent='פרטי '+empName+' — '+MONTHS[month]+' '+year;
+  const tbody=document.getElementById('detail-body');tbody.innerHTML='';
+  sections.forEach((name,i)=>{
+    const s=saved['s'+(i+1)]||{};const dl=deadlines['s'+(i+1)]||'';
+    const isLate=dl&&!s.done&&today>dl;
+    const tr=document.createElement('tr');
+    if(s.done)tr.className='row-done';else if(isLate)tr.className='row-late';
+    tr.innerHTML='<td style="color:#888;font-size:12px;">'+(i+1)+'</td>'+
+      '<td style="font-weight:600;font-size:13px;">'+name+'</td>'+
+      '<td style="font-size:12px;">'+(dl?'<span class="dl-badge '+(isLate?'dl-late':'dl-ok')+'">'+formatDate(dl)+'</span>':'—')+'</td>'+
+      '<td style="font-size:12px;">'+(s.date?formatDate(s.date):'—')+'</td>'+
+      '<td><div class="status-cell"><div class="status-dot '+(s.done?'status-done':isLate?'status-late':'status-pending')+'"></div><span style="font-size:12px;">'+(s.done?'בוצע':isLate?'באיחור':'ממתין')+'</span></div></td>'+
+      '<td>'+(s.note?'<span class="note-text-badge">'+s.note+'</span>':'—')+'</td>';
+    tbody.appendChild(tr);
+  });
+  document.getElementById('detail-modal').classList.add('open');
+};
+window.closeDetail=function(){document.getElementById('detail-modal').classList.remove('open');};
+document.getElementById('detail-modal').addEventListener('click',function(e){if(e.target===this)window.closeDetail();});
+
+// ===== SUPER MASTER =====
+window.renderSupermasterView=async function(){
+  const y=document.getElementById('sm-year').value,m=parseInt(document.getElementById('sm-month').value);
+  const cards=document.getElementById('sites-summary-cards');cards.innerHTML='';
+  const tbody=document.getElementById('sm-table-body');tbody.innerHTML='';
+  const smLabels=[],smData=[],smColors=[];
+
+  for(const site of SITES_CONFIG){
+    const emps=await getEmployees(site.id);
+    const sections=await getSections(site.id);
+    const allData=await fbGet(siteRef(site.id,'data'))||{};
+    const deadlines=await fbGet(dlKey(site.id,y,m))||{};
+    const today=new Date().toISOString().slice(0,10);
+    const empData=emps.map(emp=>{
+      const md=(allData[emp.id]&&allData[emp.id]['y'+y+'_m'+m])||{};
+      const rows=sections.map((_,i)=>{const s=md['s'+(i+1)]||{};const dl=deadlines['s'+(i+1)]||'';return{done:s.done||false,isLate:dl&&!s.done&&today>dl};});
+      return{done:rows.filter(r=>r.done).length,total:rows.length,pct:Math.round(rows.filter(r=>r.done).length/rows.length*100),late:rows.filter(r=>r.isLate).length};
+    });
+    const avgPct=Math.round(empData.reduce((s,d)=>s+d.pct,0)/empData.length);
+    const totalLate=empData.reduce((s,d)=>s+d.late,0);
+
+    // card
+    const card=document.createElement('div');card.className='site-summary-card';
+    card.innerHTML='<div style="display:flex;align-items:center;gap:8px;margin-bottom:.8rem;">'+
+      '<span style="font-size:24px;">'+site.emoji+'</span>'+
+      '<div class="site-summary-name">'+site.name+'</div></div>'+
+      '<div class="emp-progress" style="margin-bottom:.5rem;"><div class="emp-progress-bar"><div class="emp-progress-fill" style="width:'+avgPct+'%;background:'+site.color+';"></div></div><span class="emp-pct">'+avgPct+'%</span></div>'+
+      '<div class="site-summary-stat">'+emps.length+' עובדים &nbsp;·&nbsp; '+(totalLate>0?'<span style="color:#e53e3e;">'+totalLate+' באיחור</span>':'ללא איחורים')+'</div>';
+    cards.appendChild(card);
+
+    // table row
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td style="font-weight:700;"><span style="font-size:16px;">'+site.emoji+'</span> '+site.name+'</td>'+
+      '<td>'+emps.length+'</td>'+
+      '<td>'+empData.reduce((s,d)=>s+d.done,0)+'/'+empData.reduce((s,d)=>s+d.total,0)+'</td>'+
+      '<td><div class="emp-progress"><div class="emp-progress-bar"><div class="emp-progress-fill" style="width:'+avgPct+'%;background:'+site.color+';"></div></div><span class="emp-pct">'+avgPct+'%</span></div></td>'+
+      '<td>'+(totalLate>0?'<span class="late-badge">'+totalLate+'</span>':'—')+'</td>';
+    tbody.appendChild(tr);
+
+    smLabels.push(site.name);smData.push(avgPct);smColors.push(site.color);
+  }
+
+  if(smChartInst)smChartInst.destroy();
+  smChartInst=new Chart(document.getElementById('smChart').getContext('2d'),{
+    type:'bar',
+    data:{labels:smLabels,datasets:[{label:'התקדמות %',data:smData,backgroundColor:smColors,borderRadius:6}]},
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}}
+  });
+};
+
+window.saveSupermasterPin=async function(){
+  const cur=document.getElementById('sm-cur-pin').value.trim();
+  const nw=document.getElementById('sm-new-pin').value.trim();
+  const nw2=document.getElementById('sm-new-pin2').value.trim();
+  const err=document.getElementById('sm-pin-err');err.textContent='';
+  const sm=await fbGet('supermaster')||DEFAULT_SUPERMASTER;
+  if(cur!==sm.pin){err.textContent='קוד נוכחי שגוי';return;}
+  if(!/^\d{4}$/.test(nw)){err.textContent='קוד חדש חייב להיות 4 ספרות';return;}
+  if(nw!==nw2){err.textContent='הקודים לא תואמים';return;}
+  showLoading(true);
+  await fbSet('supermaster',{pin:nw});
+  showLoading(false);
+  ['sm-cur-pin','sm-new-pin','sm-new-pin2'].forEach(id=>document.getElementById(id).value='');
+  showSaveMsg('sm-pin-msg');
+};
+</script>
+</body>
+</html>
