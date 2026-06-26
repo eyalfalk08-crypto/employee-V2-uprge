@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<title>מערכת דיווח עובדים</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh;direction:rtl;}
+#loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.92);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;}
+.spinner{width:44px;height:44px;border:4px solid #eee;border-top-color:#1a1a2e;border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:14px;color:#666;font-weight:600;}
+#site-picker{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a2e,#0f3460);padding:1.5rem;}
+.picker-card{background:white;border-radius:20px;padding:2rem;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,.35);}
+.picker-logo{text-align:center;margin-bottom:1.5rem;}
+.picker-logo .icon{width:56px;height:56px;background:#1a1a2e;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:.7rem;}
+.picker-logo .icon svg{width:28px;height:28px;fill:white;}
+.picker-logo h1{font-size:20px;font-weight:700;color:#1a1a2e;}
+.picker-logo p{font-size:12px;color:#888;margin-top:3px;}
+.sites-grid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin-bottom:.8rem;}
+.site-btn{background:#f8f9fa;border:1.5px solid #e0e0e0;border-radius:12px;padding:.9rem;cursor:pointer;text-align:center;transition:all .2s;}
+.site-btn:hover{background:#eef2ff;border-color:#1a1a2e;}
+.site-emoji{font-size:26px;margin-bottom:.3rem;}
+.site-name{font-size:13px;font-weight:700;color:#1a1a2e;}
+.supermaster-btn{width:100%;background:#1a1a2e;color:white;border:none;border-radius:10px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;margin-top:.3rem;}
+#login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a2e,#0f3460);padding:1rem;}
+.login-card{background:white;border-radius:20px;padding:2rem;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.35);}
+.back-btn{background:none;border:none;color:#1a1a2e;font-size:13px;cursor:pointer;margin-bottom:.8rem;padding:0;display:flex;align-items:center;gap:4px;}
+.login-logo{text-align:center;margin-bottom:1.3rem;}
+.login-emoji{font-size:36px;margin-bottom:.4rem;}
+.login-logo h1{font-size:18px;font-weight:700;color:#1a1a2e;}
+.login-logo p{font-size:12px;color:#888;margin-top:3px;}
+.fg{margin-bottom:1rem;}
+.fg label{display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:5px;}
+.fg select,.fg input{width:100%;padding:11px 13px;border:1.5px solid #e0e0e0;border-radius:9px;font-size:14px;outline:none;background:white;direction:rtl;-webkit-appearance:none;}
+.fg select:focus,.fg input:focus{border-color:#1a1a2e;}
+.btn-login{width:100%;padding:13px;background:#1a1a2e;color:white;border:none;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;}
+.error-msg{color:#e53e3e;font-size:12px;text-align:center;margin-top:6px;min-height:18px;}
+#app{display:none;min-height:100vh;}
+.header{background:#1a1a2e;color:white;padding:0 1rem;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.header-left{display:flex;align-items:center;gap:.6rem;}
+.header-title{font-size:15px;font-weight:700;}
+.header-site{font-size:11px;background:rgba(255,255,255,.15);padding:3px 10px;border-radius:10px;}
+.header-user{font-size:11px;color:#aaa;}
+.btn-logout{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:white;padding:6px 13px;border-radius:7px;cursor:pointer;font-size:12px;}
+#employee-view{padding:1rem;max-width:960px;margin:0 auto;}
+.month-sel{background:white;border-radius:12px;padding:.9rem 1.2rem;margin-bottom:1rem;display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.month-sel label{font-weight:700;font-size:13px;white-space:nowrap;}
+.month-sel select{padding:7px 11px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;outline:none;background:white;cursor:pointer;-webkit-appearance:none;}
+.prog-wrap{background:white;border-radius:12px;padding:.9rem 1.2rem;margin-bottom:1rem;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.prog-lbl{font-size:13px;color:#666;margin-bottom:7px;display:flex;justify-content:space-between;}
+.prog-track{height:9px;background:#eee;border-radius:5px;overflow:hidden;}
+.prog-fill{height:100%;background:linear-gradient(90deg,#1a1a2e,#0f3460);border-radius:5px;transition:width .4s;}
+.table-card{background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.table-card-header{padding:.9rem 1.2rem;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;}
+.table-card-header h2{font-size:14px;font-weight:700;}
+.month-badge{background:#eef2ff;color:#1a1a2e;padding:3px 11px;border-radius:20px;font-size:11px;font-weight:600;}
+.table-scroll{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;}
+thead th{background:#f8f9fa;padding:9px 11px;text-align:right;font-size:11px;font-weight:700;color:#666;border-bottom:1px solid #eee;white-space:nowrap;}
+tbody tr{border-bottom:1px solid #f5f5f5;}
+tbody tr:last-child{border-bottom:none;}
+tbody td{padding:9px 11px;font-size:12px;vertical-align:middle;}
+.row-done{background:#f0fff4;}
+.row-late{background:#fff5f5;}
+.status-cell{display:flex;align-items:center;gap:5px;}
+.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.status-done{background:#38a169;}.status-pending{background:#e2e8f0;}.status-late{background:#e53e3e;}
+.date-input{border:1.5px solid #e0e0e0;border-radius:8px;padding:6px 8px;font-size:12px;outline:none;width:135px;cursor:pointer;-webkit-appearance:none;}
+.date-input:focus{border-color:#1a1a2e;}
+.check-wrap{display:flex;align-items:center;gap:5px;}
+.check-wrap input[type=checkbox]{width:18px;height:18px;cursor:pointer;accent-color:#1a1a2e;}
+.note-input{border:1.5px solid #e0e0e0;border-radius:8px;padding:6px 8px;font-size:12px;outline:none;width:100%;min-width:90px;resize:vertical;direction:rtl;font-family:inherit;}
+.note-input:focus{border-color:#1a1a2e;}
+.dl-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;}
+.dl-ok{background:#dcfce7;color:#166534;}
+.dl-late{background:#fee2e2;color:#991b1b;}
+.btn-save{background:#1a1a2e;color:white;border:none;padding:11px;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;display:block;margin:1rem auto 0;width:100%;max-width:260px;}
+.save-success{text-align:center;color:#38a169;font-size:12px;margin-top:7px;min-height:18px;opacity:0;transition:opacity .3s;}
+.save-success.show{opacity:1;}
+#master-view{padding:1rem;max-width:1200px;margin:0 auto;}
+.master-tabs{display:flex;gap:6px;margin-bottom:1.2rem;overflow-x:auto;padding-bottom:2px;}
+.master-tab{padding:8px 15px;border-radius:8px;border:1.5px solid #e0e0e0;background:white;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.master-tab.active{background:#1a1a2e;color:white;border-color:#1a1a2e;}
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.7rem;margin-bottom:1.2rem;}
+@media(min-width:500px){.stats-grid{grid-template-columns:repeat(4,1fr);}}
+.stat-card{background:white;border-radius:12px;padding:.9rem 1.1rem;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.stat-label{font-size:11px;color:#888;font-weight:700;}
+.stat-value{font-size:22px;font-weight:800;color:#1a1a2e;margin-top:2px;}
+.stat-danger .stat-value{color:#e53e3e;}
+.chart-card{background:white;border-radius:12px;padding:1.1rem;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:1.2rem;}
+.chart-card h3{font-size:13px;font-weight:700;margin-bottom:.7rem;}
+.emp-table-card{background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:1.2rem;}
+.emp-table-card h3{padding:.8rem 1.2rem;font-size:13px;font-weight:700;border-bottom:1px solid #f0f0f0;}
+.emp-prog-bar{flex:1;height:6px;background:#eee;border-radius:3px;overflow:hidden;min-width:36px;}
+.emp-prog-fill{height:100%;border-radius:3px;}
+.emp-pct{font-size:11px;font-weight:700;color:#666;min-width:32px;}
+.filter-bar{display:flex;align-items:center;gap:.8rem;margin-bottom:1.2rem;background:white;padding:.8rem 1.2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);flex-wrap:wrap;}
+.filter-bar label{font-weight:700;font-size:13px;white-space:nowrap;}
+.filter-bar select{padding:7px 11px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;outline:none;cursor:pointer;-webkit-appearance:none;}
+.live-badge{display:flex;align-items:center;gap:5px;font-size:12px;color:#38a169;font-weight:700;margin-right:auto;}
+.live-dot{width:8px;height:8px;background:#38a169;border-radius:50%;animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.view-btn{background:#eef2ff;color:#1a1a2e;border:none;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;}
+.notes-badge{background:#fef9c3;color:#713f12;font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;}
+.late-badge{background:#fee2e2;color:#991b1b;font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;}
+.note-text-badge{display:inline-block;background:#fef9c3;color:#713f12;font-size:11px;padding:2px 7px;border-radius:6px;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.panel{display:none;}
+.panel-card{background:white;border-radius:12px;padding:1.4rem;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:1rem;}
+.panel-card h3{font-size:15px;font-weight:700;margin-bottom:.3rem;}
+.panel-sub{font-size:12px;color:#888;margin-bottom:1.1rem;}
+.warning-box{background:#fffbeb;border:1px solid #f6d860;border-radius:9px;padding:.8rem 1rem;margin-bottom:1.1rem;font-size:12px;color:#7d5d00;}
+.sec-row{display:flex;align-items:center;gap:9px;margin-bottom:8px;}
+.sec-num{width:24px;height:24px;background:#1a1a2e;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;}
+.sec-input{flex:1;padding:8px 11px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;outline:none;direction:rtl;}
+.sec-input:focus{border-color:#1a1a2e;}
+.btn-del{background:#fee2e2;color:#991b1b;border:none;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+.btn-add{background:#f0fff4;color:#166534;border:1.5px dashed #38a169;border-radius:9px;padding:9px;width:100%;cursor:pointer;font-size:13px;font-weight:700;margin-top:.4rem;}
+.emp-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 11px;border:1.5px solid #eee;border-radius:9px;background:#fafafa;flex-wrap:wrap;}
+.emp-num{width:24px;height:24px;background:#1a1a2e;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;}
+.emp-name-input{flex:2;min-width:80px;padding:7px 11px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;outline:none;direction:rtl;}
+.emp-pin-input{width:85px;padding:7px 11px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;outline:none;direction:ltr;text-align:center;letter-spacing:2px;}
+.emp-lbl{font-size:10px;color:#999;white-space:nowrap;}
+.btn-del-emp{background:#fee2e2;color:#991b1b;border:none;width:26px;height:26px;border-radius:6px;cursor:pointer;font-size:14px;flex-shrink:0;}
+.btn-add-emp{background:#f0fff4;color:#166534;border:1.5px dashed #38a169;border-radius:9px;padding:8px;width:100%;cursor:pointer;font-size:13px;font-weight:700;margin-top:.4rem;}
+.btn-primary{background:#1a1a2e;color:white;border:none;padding:10px 24px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;margin-top:.9rem;}
+.panel-save-msg{color:#38a169;font-size:12px;margin-top:7px;opacity:0;transition:opacity .3s;min-height:16px;}
+.panel-save-msg.show{opacity:1;}
+.pin-group{display:flex;flex-direction:column;gap:.7rem;max-width:300px;}
+.pin-group label{font-size:12px;font-weight:600;color:#555;margin-bottom:2px;display:block;}
+.pin-field{padding:10px 13px;border:1.5px solid #e0e0e0;border-radius:9px;font-size:14px;outline:none;direction:ltr;letter-spacing:3px;text-align:center;width:100%;}
+.pin-field:focus{border-color:#1a1a2e;}
+.pin-err{color:#e53e3e;font-size:12px;min-height:14px;}
+#supermaster-app{display:none;min-height:100vh;}
+#supermaster-view{padding:1rem;max-width:1200px;margin:0 auto;}
+.sm-tabs{display:flex;gap:6px;margin-bottom:1.2rem;overflow-x:auto;padding-bottom:2px;}
+.sm-tab{padding:8px 15px;border-radius:8px;border:1.5px solid #e0e0e0;background:white;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.sm-tab.active{background:#1a1a2e;color:white;border-color:#1a1a2e;}
+.sites-overview{display:grid;grid-template-columns:repeat(2,1fr);gap:.8rem;margin-bottom:1.2rem;}
+@media(min-width:700px){.sites-overview{grid-template-columns:repeat(3,1fr);}}
+.site-ov-card{background:white;border-radius:12px;padding:1.1rem;box-shadow:0 2px 8px rgba(0,0,0,.06);cursor:pointer;transition:box-shadow .2s;border:2px solid transparent;}
+.site-ov-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.12);}
+.site-ov-card.selected{border-color:#1a1a2e;}
+.site-ov-hdr{display:flex;align-items:center;gap:.5rem;margin-bottom:.7rem;}
+.site-ov-emoji{font-size:22px;}
+.site-ov-name{font-size:13px;font-weight:700;}
+.site-ov-prog-lbl{display:flex;justify-content:space-between;font-size:11px;color:#666;margin-bottom:4px;}
+.site-ov-track{height:6px;background:#eee;border-radius:3px;overflow:hidden;}
+.site-ov-fill{height:100%;border-radius:3px;}
+.site-ov-stats{font-size:11px;color:#888;margin-top:.4rem;}
+.manage-site-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:10px 12px;border:1.5px solid #eee;border-radius:10px;background:#fafafa;flex-wrap:wrap;}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:1rem;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:white;border-radius:16px;padding:1.4rem;width:100%;max-width:720px;max-height:88vh;overflow-y:auto;direction:rtl;}
+.modal-box h2{font-size:16px;font-weight:700;margin-bottom:1.1rem;}
+.modal-close{float:left;background:#eee;border:none;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:15px;line-height:28px;text-align:center;}
+@media(max-width:560px){
+thead{display:none;}
+tbody tr{display:block;padding:.6rem .4rem;border-bottom:1px solid #eee;}
+tbody td{display:flex;align-items:center;justify-content:space-between;padding:3px 7px;font-size:12px;border:none;}
+tbody td:before{content:attr(data-label);font-size:10px;color:#888;font-weight:700;margin-left:.4rem;white-space:nowrap;flex-shrink:0;}
+.date-input{max-width:130px;}
+}
+</style>
+</head>
+<body>
+<div id="loading-overlay"><div class="spinner"></div><div class="loading-text">מתחבר...</div></div>
+
+<div id="site-picker" style="display:none;">
+  <div class="picker-card">
+    <div class="picker-logo">
+      <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></div>
+      <h1>מערכת דיווח עובדים</h1>
+      <p>בחר מקום עבודה</p>
+    </div>
+    <div class="sites-grid" id="sites-grid"></div>
+    <button class="supermaster-btn" onclick="enterSupermaster()">כניסת מנהל-על 🔐</button>
+  </div>
+</div>
+
+<div id="login-screen" style="display:none;">
+  <div class="login-card">
+    <button class="back-btn" onclick="goBack()">← חזור</button>
+    <div class="login-logo">
+      <div class="login-emoji" id="login-emoji">🏢</div>
+      <h1 id="login-site-name">מקום עבודה</h1>
+      <p>הכנס פרטים לכניסה</p>
+    </div>
+    <div class="fg"><label>בחר עובד</label><select id="login-user"><option value="">-- בחר --</option></select></div>
+    <div class="fg"><label>קוד כניסה (4 ספרות)</label><input type="password" id="login-pin" maxlength="4" placeholder="הכנס קוד" inputmode="numeric" pattern="[0-9]*"></div>
+    <button class="btn-login" onclick="doLogin()">כניסה</button>
+    <div class="error-msg" id="login-error"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="header">
+    <div class="header-left">
+      <div class="header-title">מערכת דיווח</div>
+      <span class="header-site" id="header-site"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:.4rem;">
+      <span class="header-user" id="header-user"></span>
+      <button class="btn-logout" onclick="doLogout()">יציאה</button>
+    </div>
+  </div>
+
+  <div id="employee-view">
+    <div class="month-sel">
+      <label>שנה:</label><select id="emp-year" onchange="renderEmployeeTable()" style="width:84px;"></select>
+      <label>חודש:</label><select id="emp-month" onchange="renderEmployeeTable()"></select>
+    </div>
+    <div class="prog-wrap">
+      <div class="prog-lbl"><span id="progress-text">התקדמות</span><span id="progress-pct">0%</span></div>
+      <div class="prog-track"><div class="prog-fill" id="progress-fill" style="width:0%"></div></div>
+    </div>
+    <div class="table-card">
+      <div class="table-card-header">
+        <h2 id="emp-table-title">פירוט סעיפים</h2>
+        <span class="month-badge" id="emp-month-badge"></span>
+      </div>
+      <div class="table-scroll">
+        <table><thead><tr><th>#</th><th>שם סעיף</th><th>דד-ליין</th><th>תאריך ביצוע</th><th>סטטוס</th><th>הערות</th></tr></thead>
+        <tbody id="emp-table-body"></tbody></table>
+      </div>
+      <div style="padding:1rem 1.2rem 1.4rem;">
+        <button class="btn-save" onclick="saveEmployeeData()">שמור נתונים</button>
+        <div class="save-success" id="save-msg">הנתונים נשמרו!</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="master-view" style="display:none;">
+    <div class="master-tabs">
+      <button class="master-tab active" onclick="showMasterTab('dashboard')">לוח בקרה</button>
+      <button class="master-tab" onclick="showMasterTab('deadlines')">דד-ליינים</button>
+      <button class="master-tab" onclick="showMasterTab('sections')">סעיפים</button>
+      <button class="master-tab" onclick="showMasterTab('employees')">עובדים</button>
+      <button class="master-tab" onclick="showMasterTab('settings')">הגדרות</button>
+    </div>
+    <div id="dashboard-panel">
+      <div class="filter-bar">
+        <label>שנה:</label><select id="m-year" onchange="renderMasterView()" style="width:80px;"></select>
+        <label>חודש:</label><select id="m-month" onchange="renderMasterView()"></select>
+        <div class="live-badge"><div class="live-dot"></div>עדכון בזמן אמת</div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">עובדים</div><div class="stat-value" id="stat-emps">0</div></div>
+        <div class="stat-card"><div class="stat-label">100%</div><div class="stat-value" id="stat-comp">0</div></div>
+        <div class="stat-card"><div class="stat-label">ממוצע</div><div class="stat-value" id="stat-avg">0%</div></div>
+        <div class="stat-card stat-danger"><div class="stat-label">באיחור</div><div class="stat-value" id="stat-late">0</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.2rem;">
+        <div class="chart-card"><h3>התקדמות לפי עובד</h3><canvas id="barChart"></canvas></div>
+        <div class="chart-card"><h3>התפלגות</h3><canvas id="pieChart"></canvas></div>
+      </div>
+      <div class="emp-table-card">
+        <h3>סיכום עובדים</h3>
+        <div class="table-scroll"><table>
+          <thead><tr><th>עובד</th><th>מולאו</th><th>התקדמות</th><th>איחורים</th><th>הערות</th><th>פרטים</th></tr></thead>
+          <tbody id="master-table-body"></tbody>
+        </table></div>
+      </div>
+    </div>
+    <div id="deadlines-panel" class="panel">
+      <div class="panel-card">
+        <h3>דד-ליינים לסעיפים</h3>
+        <p class="panel-sub">לפי חודש — חודשים אחרים לא מושפעים.</p>
+        <div style="display:flex;align-items:center;gap:.8rem;margin-bottom:1.1rem;flex-wrap:wrap;">
+          <label style="font-weight:700;font-size:13px;">חודש:</label>
+          <select id="dl-year" onchange="buildDeadlineEditor()" style="padding:7px 11px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;outline:none;-webkit-appearance:none;width:84px;"></select>
+          <select id="dl-month" onchange="buildDeadlineEditor()" style="padding:7px 11px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;outline:none;-webkit-appearance:none;"></select>
+          <span id="dl-info" style="font-size:12px;font-weight:700;background:#eef2ff;padding:4px 12px;border-radius:20px;color:#1a1a2e;"></span>
+        </div>
+        <div id="deadline-inputs"></div>
+        <button class="btn-primary" onclick="saveDeadlines()">שמור דד-ליינים</button>
+        <div class="panel-save-msg" id="dl-save-msg">נשמר!</div>
+      </div>
+    </div>
+    <div id="sections-panel" class="panel">
+      <div class="panel-card">
+        <h3>ניהול סעיפים</h3>
+        <p class="panel-sub">הוסף, מחק או שנה שם. השינויים משפיעים על כל עובדי המקום הזה.</p>
+        <div class="warning-box">מחיקת סעיף לא מוחקת נתונים היסטוריים שנשמרו.</div>
+        <div id="section-inputs"></div>
+        <button class="btn-add" onclick="addSection()">+ הוסף סעיף</button>
+        <button class="btn-primary" onclick="saveSectionNames()">שמור שמות</button>
+        <div class="panel-save-msg" id="sections-save-msg">נשמר!</div>
+      </div>
+    </div>
+    <div id="employees-panel" class="panel">
+      <div class="panel-card">
+        <h3>ניהול עובדים</h3>
+        <p class="panel-sub">הוסף, מחק או ערוך עובדים.</p>
+        <div id="emp-manage-list"></div>
+        <button class="btn-add-emp" onclick="addEmployee()">+ הוסף עובד</button>
+        <button class="btn-primary" onclick="saveEmployeeManage()">שמור שינויים</button>
+        <div class="panel-save-msg" id="emp-manage-msg">נשמר!</div>
+      </div>
+    </div>
+    <div id="settings-panel" class="panel">
+      <div class="panel-card" style="max-width:320px;">
+        <h3>שינוי סיסמת מנהל מקומי</h3>
+        <div class="pin-group" style="margin-top:1rem;">
+          <div><label>קוד נוכחי</label><input type="password" class="pin-field" id="lm-cur" maxlength="4" placeholder="····" inputmode="numeric"></div>
+          <div><label>קוד חדש</label><input type="password" class="pin-field" id="lm-new" maxlength="4" placeholder="····" inputmode="numeric"></div>
+          <div><label>אשר קוד חדש</label><input type="password" class="pin-field" id="lm-new2" maxlength="4" placeholder="····" inputmode="numeric"></div>
+          <button class="btn-primary" onclick="saveLocalPin()">שנה קוד</button>
+          <div class="pin-err" id="lm-pin-err"></div>
+          <div class="panel-save-msg" id="lm-pin-msg">הקוד עודכן!</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="supermaster-app">
+  <div class="header">
+    <div class="header-left">
+      <div class="header-title">מנהל-על</div>
+      <span class="header-site" style="background:rgba(255,215,0,.2);color:#ffd700;">כל המקומות</span>
+    </div>
+    <button class="btn-logout" onclick="doLogout()">יציאה</button>
+  </div>
+  <div id="supermaster-view">
+    <div class="sm-tabs">
+      <button class="sm-tab active" onclick="smTab('overview',this)">סקירה כללית</button>
+      <button class="sm-tab" onclick="smTab('detail',this)">פרטי מקום</button>
+      <button class="sm-tab" onclick="smTab('manage',this)">ניהול מקומות</button>
+      <button class="sm-tab" onclick="smTab('settings',this)">הגדרות</button>
+    </div>
+    <div id="sm-overview">
+      <div class="filter-bar">
+        <label>שנה:</label><select id="sm-year" onchange="renderSMOverview()" style="width:80px;"></select>
+        <label>חודש:</label><select id="sm-month" onchange="renderSMOverview()"></select>
+        <div class="live-badge"><div class="live-dot"></div>כל המקומות</div>
+      </div>
+      <div class="sites-overview" id="sm-overview-cards"></div>
+      <div class="chart-card"><h3>השוואת מקומות עבודה</h3><canvas id="smChart" height="100"></canvas></div>
+      <div class="emp-table-card">
+        <h3>סיכום מקומות</h3>
+        <div class="table-scroll"><table>
+          <thead><tr><th>מקום עבודה</th><th>עובדים</th><th>סעיפים</th><th>ממוצע</th><th>באיחור</th></tr></thead>
+          <tbody id="sm-sites-table"></tbody>
+        </table></div>
+      </div>
+    </div>
+    <div id="sm-detail" class="panel">
+      <div class="filter-bar">
+        <label>מקום:</label>
+        <select id="sm-detail-site" onchange="renderSMDetail()" style="min-width:140px;"></select>
+        <label>שנה:</label><select id="sm-detail-year" onchange="renderSMDetail()" style="width:80px;"></select>
+        <label>חודש:</label><select id="sm-detail-month" onchange="renderSMDetail()"></select>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">עובדים</div><div class="stat-value" id="sd-emps">0</div></div>
+        <div class="stat-card"><div class="stat-label">100%</div><div class="stat-value" id="sd-comp">0</div></div>
+        <div class="stat-card"><div class="stat-label">ממוצע</div><div class="stat-value" id="sd-avg">0%</div></div>
+        <div class="stat-card stat-danger"><div class="stat-label">באיחור</div><div class="stat-value" id="sd-late">0</div></div>
+      </div>
+      <div class="emp-table-card">
+        <h3 id="sd-title">פרטי עובדים</h3>
+        <div class="table-scroll"><table>
+          <thead><tr><th>עובד</th><th>מולאו</th><th>התקדמות</th><th>איחורים</th><th>הערות</th><th>פרטים</th></tr></thead>
+          <tbody id="sd-table"></tbody>
+        </table></div>
+      </div>
+    </div>
+    <div id="sm-manage" class="panel">
+      <div class="panel-card">
+        <h3>ניהול מקומות עבודה</h3>
+        <p class="panel-sub">הוסף, מחק או שנה שם מקומות עבודה.</p>
+        <div id="sm-sites-list"></div>
+        <button class="btn-add" onclick="addSite()">+ הוסף מקום עבודה</button>
+        <button class="btn-primary" onclick="saveSites()">שמור שינויים</button>
+        <div class="panel-save-msg" id="sm-manage-msg">נשמר!</div>
+      </div>
+    </div>
+    <div id="sm-settings" class="panel">
+      <div class="panel-card" style="max-width:320px;">
+        <h3>שינוי סיסמת מנהל-על</h3>
+        <div class="pin-group" style="margin-top:1rem;">
+          <div><label>קוד נוכחי</label><input type="password" class="pin-field" id="sm-cur" maxlength="4" placeholder="····" inputmode="numeric"></div>
+          <div><label>קוד חדש</label><input type="password" class="pin-field" id="sm-new" maxlength="4" placeholder="····" inputmode="numeric"></div>
+          <div><label>אשר</label><input type="password" class="pin-field" id="sm-new2" maxlength="4" placeholder="····" inputmode="numeric"></div>
+          <button class="btn-primary" onclick="saveSMPin()">שנה קוד</button>
+          <div class="pin-err" id="sm-pin-err"></div>
+          <div class="panel-save-msg" id="sm-pin-msg">הקוד עודכן!</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="sm-login-modal">
+  <div class="modal-box" style="max-width:320px;text-align:center;">
+    <h2 style="margin-bottom:1rem;">כניסת מנהל-על</h2>
+    <div class="fg" style="margin-bottom:1rem;">
+      <label>קוד מנהל-על</label>
+      <input type="password" id="sm-login-pin" maxlength="4" placeholder="····" inputmode="numeric" class="pin-field" style="margin-top:4px;">
+    </div>
+    <div class="error-msg" id="sm-login-err"></div>
+    <div style="display:flex;gap:.6rem;justify-content:center;margin-top:.5rem;">
+      <button onclick="closeSMLogin()" style="padding:9px 20px;border:1.5px solid #e0e0e0;border-radius:8px;background:white;cursor:pointer;font-size:13px;">ביטול</button>
+      <button onclick="doSMLogin()" style="padding:9px 20px;background:#1a1a2e;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">כניסה</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeDetail()">✕</button>
+    <h2 id="detail-title">פרטי עובד</h2>
+    <div class="table-scroll"><table>
+      <thead><tr><th>#</th><th>שם סעיף</th><th>דד-ליין</th><th>תאריך ביצוע</th><th>סטטוס</th><th>הערות</th></tr></thead>
+      <tbody id="detail-body"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey:            "AIzaSyDyTN8H7FwyhA9wjsEH97fwJB2TGJgEfpA",
+  authDomain:        "work-system-73906.firebaseapp.com",
+  databaseURL:       "https://work-system-73906-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "work-system-73906",
+  storageBucket:     "work-system-73906.firebasestorage.app",
+  messagingSenderId: "227399680422",
+  appId:             "1:227399680422:web:4911726e11a17572b40f67"
+};
+
+const DEFAULT_SECTIONS = ['סעיף 1','סעיף 2','סעיף 3','סעיף 4','סעיף 5','סעיף 6','סעיף 7','סעיף 8','סעיף 9','סעיף 10'];
+const DEFAULT_EMPLOYEES = Array.from({length:18},(_,i)=>({id:'emp'+(i+1),name:'עובד '+(i+1),pin:(''+(i+1)).padStart(4,'0')}));
+const DEFAULT_SITES = [
+  {id:'site1',name:'מקום עבודה 1',emoji:'🏢'},
+  {id:'site2',name:'מקום עבודה 2',emoji:'🏪'},
+  {id:'site3',name:'מקום עבודה 3',emoji:'🏭'},
+];
+const DEFAULT_LM_PIN = '1234';
+const DEFAULT_SM_PIN = '9999';
+const MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+const YEARS = [2025,2026,2027,2028,2029,2030];
+const EMOJIS = ['🏢','🏪','🏭','🏬','🏫','🏗','🏥','🏦','🏨','🏩','⚙️','🔧'];
+
+let app=null,db=null;
+let currentUser=null,currentSite=null,currentRole=null;
+let barChartInst=null,pieChartInst=null,smChartInst=null,masterUnsub=null;
+let cachedEmps={},cachedSecs={},cachedSites=null;
+
+try{app=firebase.initializeApp(firebaseConfig);db=firebase.database();}catch(e){}
+
+function sRef(siteId,path){return 'v3/sites/'+siteId+(path?'/'+path:'');}
+function dlKey(siteId,y,m){return sRef(siteId,'deadlines/y'+y+'_m'+m);}
+function dataKey(siteId,empId,y,m){return sRef(siteId,'data/'+empId+'/y'+y+'_m'+m);}
+async function fbGet(path){const s=await db.ref(path).once('value');return s.exists()?s.val():null;}
+async function fbSet(path,val){await db.ref(path).set(val);}
+function fbListen(path,cb){return db.ref(path).on('value',s=>cb(s.exists()?s.val():null));}
+function showLoading(v){document.getElementById('loading-overlay').style.display=v?'flex':'none';}
+function showSaveMsg(id){const m=document.getElementById(id);if(m){m.classList.add('show');setTimeout(()=>m.classList.remove('show'),2500);}}
+function formatDate(d){if(!d)return'';const[y,m,day]=d.split('-');return day+'/'+m+'/'+y;}
+function buildYearSelect(id){const s=document.getElementById(id);if(!s)return;s.innerHTML='';YEARS.forEach(y=>{const o=document.createElement('option');o.value=y;o.textContent=y;s.appendChild(o);});s.value=YEARS.includes(new Date().getFullYear())?new Date().getFullYear():YEARS[0];}
+function buildMonthSelect(id){const s=document.getElementById(id);if(!s)return;s.innerHTML='';MONTHS.forEach((m,i)=>{const o=document.createElement('option');o.value=i;o.textContent=m;s.appendChild(o);});s.value=new Date().getMonth();}
+
+var _started=false;
+var _t=setInterval(function(){
+  if(_started||!db||!document.getElementById('site-picker'))return;
+  _started=true;clearInterval(_t);
+  db.ref('v3/config').once('value').then(function(snap){
+    var cfg=snap.val()||{};
+    var p=Promise.resolve();
+    if(!cfg.sites) p=p.then(function(){return db.ref('v3/config/sites').set(DEFAULT_SITES);});
+    if(!cfg.supermaster) p=p.then(function(){return db.ref('v3/config/supermaster').set({pin:DEFAULT_SM_PIN});});
+    return p;
+  }).then(function(){
+    return db.ref('v3/config/sites').once('value');
+  }).then(function(snap){
+    cachedSites=snap.val()||DEFAULT_SITES;
+    var inits=[];
+    cachedSites.forEach(function(site){
+      inits.push(initSite(site.id));
+    });
+    return Promise.all(inits);
+  }).then(function(){
+    showLoading(false);
+    buildSitePicker();
+    document.getElementById('site-picker').style.display='flex';
+  }).catch(function(e){console.error(e);showLoading(false);});
+},200);
+
+async function initSite(siteId){
+  const cfg=await fbGet(sRef(siteId,'config'))||{};
+  const p=[];
+  if(!cfg.employees) p.push(fbSet(sRef(siteId,'config/employees'),DEFAULT_EMPLOYEES));
+  if(!cfg.sections)  p.push(fbSet(sRef(siteId,'config/sections'),DEFAULT_SECTIONS));
+  if(!cfg.localmaster) p.push(fbSet(sRef(siteId,'config/localmaster'),{pin:DEFAULT_LM_PIN}));
+  await Promise.all(p);
+}
+
+function buildSitePicker(){
+  const grid=document.getElementById('sites-grid');grid.innerHTML='';
+  (cachedSites||[]).forEach(function(site){
+    const btn=document.createElement('button');btn.className='site-btn';
+    btn.innerHTML='<div class="site-emoji">'+site.emoji+'</div><div class="site-name">'+site.name+'</div>';
+    btn.onclick=function(){showLogin(site);};
+    grid.appendChild(btn);
+  });
+}
+
+function showLogin(site){
+  currentSite=site;
+  document.getElementById('login-emoji').textContent=site.emoji;
+  document.getElementById('login-site-name').textContent=site.name;
+  document.getElementById('login-pin').value='';
+  document.getElementById('login-error').textContent='';
+  document.getElementById('site-picker').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  buildLoginSelectForSite(site.id);
+}
+
+async function buildLoginSelectForSite(siteId){
+  const emps=await getEmployees(siteId);
+  const sel=document.getElementById('login-user');
+  sel.innerHTML='<option value="">-- בחר --</option>';
+  emps.forEach(function(e){const o=document.createElement('option');o.value=e.id;o.textContent=e.name;sel.appendChild(o);});
+  const m=document.createElement('option');m.value='localmaster';m.textContent='מנהל מקומי';sel.appendChild(m);
+}
+
+function goBack(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('site-picker').style.display='flex';
+}
+
+window.doLogin=async function(){
+  const uid=document.getElementById('login-user').value;
+  const pin=document.getElementById('login-pin').value.trim();
+  const err=document.getElementById('login-error');err.textContent='';
+  if(!uid){err.textContent='יש לבחור עובד';return;}
+  if(!pin){err.textContent='יש להזין קוד';return;}
+  showLoading(true);
+  try{
+    if(uid==='localmaster'){
+      const lm=await fbGet(sRef(currentSite.id,'config/localmaster'))||{pin:DEFAULT_LM_PIN};
+      if(pin!==(lm.pin||DEFAULT_LM_PIN)){err.textContent='קוד שגוי';showLoading(false);return;}
+      currentUser={id:'localmaster',name:'מנהל מקומי'};currentRole='localmaster';
+      await enterLocalMaster();
+    }else{
+      const emps=await getEmployees(currentSite.id);
+      const emp=emps.find(e=>e.id===uid);
+      if(!emp||pin!==emp.pin){err.textContent='קוד שגוי';showLoading(false);return;}
+      currentUser=emp;currentRole='emp';await enterEmployee();
+    }
+  }catch(e){err.textContent='שגיאת חיבור';}
+  showLoading(false);
+};
+document.getElementById('login-pin').addEventListener('keydown',e=>{if(e.key==='Enter')window.doLogin();});
+document.getElementById('detail-modal').addEventListener('click',function(e){if(e.target===this)closeDetail();});
+
+window.doLogout=function(){
+  if(masterUnsub){masterUnsub();masterUnsub=null;}
+  cachedEmps={};cachedSecs={};
+  currentUser=null;currentSite=null;currentRole=null;
+  document.getElementById('app').style.display='none';
+  document.getElementById('supermaster-app').style.display='none';
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('site-picker').style.display='flex';
+  buildSitePicker();
+};
+
+function enterSupermaster(){
+  document.getElementById('sm-login-pin').value='';
+  document.getElementById('sm-login-err').textContent='';
+  document.getElementById('sm-login-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('sm-login-pin').focus(),100);
+}
+window.closeSMLogin=function(){document.getElementById('sm-login-modal').classList.remove('open');};
+window.doSMLogin=async function(){
+  const pin=document.getElementById('sm-login-pin').value.trim();
+  const err=document.getElementById('sm-login-err');err.textContent='';
+  if(!pin){err.textContent='יש להזין קוד';return;}
+  showLoading(true);
+  const sm=await fbGet('v3/config/supermaster')||{pin:DEFAULT_SM_PIN};
+  showLoading(false);
+  if(pin!==sm.pin){err.textContent='קוד שגוי';return;}
+  document.getElementById('sm-login-modal').classList.remove('open');
+  currentRole='supermaster';
+  document.getElementById('supermaster-app').style.display='block';
+  buildYearSelect('sm-year');buildMonthSelect('sm-month');
+  buildYearSelect('sm-detail-year');buildMonthSelect('sm-detail-month');
+  buildSMDetailSiteSelect();
+  buildSMSitesList();
+  renderSMOverview();
+};
+document.addEventListener('DOMContentLoaded',function(){
+  const p=document.getElementById('sm-login-pin');
+  if(p)p.addEventListener('keydown',function(e){if(e.key==='Enter')window.doSMLogin();});
+  const dm=document.getElementById('sm-login-modal');
+  if(dm)dm.addEventListener('click',function(e){if(e.target===this)window.closeSMLogin();});
+});
+
+async function getEmployees(siteId){
+  if(cachedEmps[siteId])return cachedEmps[siteId];
+  cachedEmps[siteId]=await fbGet(sRef(siteId,'config/employees'))||DEFAULT_EMPLOYEES;
+  return cachedEmps[siteId];
+}
+async function getSections(siteId){
+  if(cachedSecs[siteId])return cachedSecs[siteId];
+  cachedSecs[siteId]=await fbGet(sRef(siteId,'config/sections'))||DEFAULT_SECTIONS;
+  return cachedSecs[siteId];
+}
+
+async function enterEmployee(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('employee-view').style.display='block';
+  document.getElementById('master-view').style.display='none';
+  document.getElementById('header-site').textContent=currentSite.name;
+  document.getElementById('header-user').textContent=currentUser.name;
+  buildYearSelect('emp-year');buildMonthSelect('emp-month');
+  await renderEmployeeTable();
+}
+
+window.renderEmployeeTable=async function(){
+  const y=document.getElementById('emp-year').value;
+  const m=parseInt(document.getElementById('emp-month').value);
+  const sections=await getSections(currentSite.id);
+  const saved=await fbGet(dataKey(currentSite.id,currentUser.id,y,m))||{};
+  const deadlines=await fbGet(dlKey(currentSite.id,y,m))||{};
+  const today=new Date().toISOString().slice(0,10);
+  document.getElementById('emp-table-title').textContent='פירוט — '+currentUser.name;
+  document.getElementById('emp-month-badge').textContent=MONTHS[m]+' '+y;
+  const tbody=document.getElementById('emp-table-body');tbody.innerHTML='';
+  const rows=sections.map((name,i)=>{const s=saved['s'+(i+1)]||{};return{name,done:s.done||false,date:s.date||'',note:s.note||''};});
+  rows.forEach((row,i)=>{
+    const dl=deadlines['s'+(i+1)]||'';const isLate=dl&&!row.done&&today>dl;
+    const tr=document.createElement('tr');
+    if(row.done)tr.className='row-done';else if(isLate)tr.className='row-late';
+    tr.innerHTML='<td data-label="#" style="color:#888;">'+(i+1)+'</td>'+
+      '<td data-label="שם סעיף" style="font-weight:600;">'+row.name+'</td>'+
+      '<td data-label="דד-ליין">'+(dl?'<span class="dl-badge '+(isLate?'dl-late':'dl-ok')+'">'+formatDate(dl)+'</span>':'<span style="color:#bbb;font-size:10px;">אין</span>')+'</td>'+
+      '<td data-label="תאריך ביצוע"><input type="date" class="date-input" value="'+row.date+'" onchange="onDateChange('+i+',this.value)"></td>'+
+      '<td data-label="סטטוס"><div class="check-wrap"><input type="checkbox" '+(row.done?'checked':'')+' onchange="onCheck('+i+',this.checked)">'+
+      '<div class="status-cell"><div class="status-dot '+(row.done?'status-done':isLate?'status-late':'status-pending')+'"></div>'+
+      '<span style="font-size:11px;">'+(row.done?'בוצע':isLate?'באיחור':'ממתין')+'</span></div></div></td>'+
+      '<td data-label="הערות"><textarea class="note-input" rows="1" placeholder="הערה..." onchange="onNote('+i+',this.value)">'+row.note+'</textarea></td>';
+    tbody.appendChild(tr);
+  });
+  const done=rows.filter(r=>r.done).length;const pct=rows.length?Math.round(done/rows.length*100):0;
+  document.getElementById('progress-text').textContent=done+' מתוך '+rows.length+' סעיפים';
+  document.getElementById('progress-pct').textContent=pct+'%';
+  document.getElementById('progress-fill').style.width=pct+'%';
+};
+
+window.onDateChange=async function(idx,val){
+  const y=document.getElementById('emp-year').value,m=parseInt(document.getElementById('emp-month').value);
+  await db.ref(dataKey(currentSite.id,currentUser.id,y,m)+'/s'+(idx+1)).update({date:val});
+};
+window.onCheck=async function(idx,checked){
+  const y=document.getElementById('emp-year').value,m=parseInt(document.getElementById('emp-month').value);
+  await db.ref(dataKey(currentSite.id,currentUser.id,y,m)+'/s'+(idx+1)).update({done:checked});
+  await window.renderEmployeeTable();
+};
+window.onNote=async function(idx,val){
+  const y=document.getElementById('emp-year').value,m=parseInt(document.getElementById('emp-month').value);
+  await db.ref(dataKey(currentSite.id,currentUser.id,y,m)+'/s'+(idx+1)).update({note:val});
+};
+window.saveEmployeeData=async function(){
+  showLoading(true);
+  const y=document.getElementById('emp-year').value,m=parseInt(document.getElementById('emp-month').value);
+  const sections=await getSections(currentSite.id);
+  const tbody=document.getElementById('emp-table-body');
+  const dates=tbody.querySelectorAll('input[type=date]');
+  const checks=tbody.querySelectorAll('input[type=checkbox]');
+  const notes=tbody.querySelectorAll('textarea');
+  const updates={};
+  sections.forEach((_,i)=>{updates[dataKey(currentSite.id,currentUser.id,y,m)+'/s'+(i+1)]={done:checks[i]?checks[i].checked:false,date:dates[i]?dates[i].value:'',note:notes[i]?notes[i].value:''};});
+  await db.ref().update(updates);
+  showLoading(false);
+  await window.renderEmployeeTable();
+  const msg=document.getElementById('save-msg');msg.classList.add('show');setTimeout(()=>msg.classList.remove('show'),2500);
+};
+
+async function enterLocalMaster(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('employee-view').style.display='none';
+  document.getElementById('master-view').style.display='block';
+  document.getElementById('header-site').textContent=currentSite.name;
+  document.getElementById('header-user').textContent='מנהל מקומי';
+  buildYearSelect('m-year');buildMonthSelect('m-month');
+  await renderMasterView();
+  await buildSectionEditor();
+  await buildEmployeeManager();
+  await buildDeadlineEditor();
+  if(masterUnsub)masterUnsub();
+  masterUnsub=fbListen(sRef(currentSite.id,'data'),async()=>{await renderMasterView();});
+}
+
+window.showMasterTab=function(tab){
+  ['dashboard','deadlines','sections','employees','settings'].forEach(p=>{
+    document.getElementById(p+'-panel').style.display=p===tab?'block':'none';
+  });
+  document.querySelectorAll('.master-tab').forEach((t,i)=>{
+    t.classList.toggle('active',['dashboard','deadlines','sections','employees','settings'][i]===tab);
+  });
+  if(tab==='sections')buildSectionEditor();
+  if(tab==='employees')buildEmployeeManager();
+  if(tab==='deadlines')buildDeadlineEditor();
+  if(tab==='dashboard')renderMasterView();
+};
+
+window.renderMasterView=async function(){
+  const y=document.getElementById('m-year').value,m=parseInt(document.getElementById('m-month').value);
+  const emps=await getEmployees(currentSite.id);
+  const sections=await getSections(currentSite.id);
+  const deadlines=await fbGet(dlKey(currentSite.id,y,m))||{};
+  const allData=await fbGet(sRef(currentSite.id,'data'))||{};
+  const today=new Date().toISOString().slice(0,10);
+  const empData=emps.map(emp=>{
+    const md=(allData[emp.id]&&allData[emp.id]['y'+y+'_m'+m])||{};
+    const rows=sections.map((n,i)=>{const s=md['s'+(i+1)]||{};const dl=deadlines['s'+(i+1)]||'';return{done:s.done||false,isLate:dl&&!s.done&&today>dl,note:s.note||''};});
+    const done=rows.filter(r=>r.done).length;
+    return{emp,done,total:rows.length,pct:Math.round(done/rows.length*100),late:rows.filter(r=>r.isLate).length,notes:rows.filter(r=>r.note&&r.note.trim()).length,rows};
+  });
+  document.getElementById('stat-emps').textContent=emps.length;
+  document.getElementById('stat-comp').textContent=empData.filter(d=>d.pct===100).length;
+  document.getElementById('stat-avg').textContent=Math.round(empData.reduce((s,d)=>s+d.pct,0)/empData.length)+'%';
+  document.getElementById('stat-late').textContent=empData.reduce((s,d)=>s+d.late,0);
+  if(barChartInst)barChartInst.destroy();
+  barChartInst=new Chart(document.getElementById('barChart').getContext('2d'),{type:'bar',data:{labels:empData.map(d=>d.emp.name),datasets:[{data:empData.map(d=>d.pct),backgroundColor:empData.map(d=>d.late>0?'#e53e3e':d.pct===100?'#38a169':d.pct>=50?'#3182ce':d.pct>0?'#e6a817':'#e2e8f0'),borderRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%',font:{size:9}}},x:{ticks:{font:{size:8}}}}}});
+  const cats=[empData.filter(d=>d.pct===100).length,empData.filter(d=>d.late>0).length,empData.filter(d=>d.pct>=50&&d.pct<100&&!d.late).length,empData.filter(d=>d.pct===0).length];
+  if(pieChartInst)pieChartInst.destroy();
+  pieChartInst=new Chart(document.getElementById('pieChart').getContext('2d'),{type:'doughnut',data:{labels:['100%','באיחור','50-99%','לא התחיל'],datasets:[{data:cats,backgroundColor:['#38a169','#e53e3e','#3182ce','#e2e8f0'],borderWidth:0}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10}}}}});
+  const tbody=document.getElementById('master-table-body');tbody.innerHTML='';
+  empData.forEach(d=>{
+    const color=d.late>0?'#e53e3e':d.pct===100?'#38a169':d.pct>=50?'#3182ce':d.pct>0?'#e6a817':'#ccc';
+    const tr=document.createElement('tr');
+    if(d.late>0)tr.style.background='#fff5f5';
+    tr.innerHTML='<td style="font-weight:700;">'+d.emp.name+'</td>'+
+      '<td style="color:#666;font-size:11px;">'+d.done+'/'+d.total+'</td>'+
+      '<td><div style="display:flex;align-items:center;gap:6px;"><div class="emp-prog-bar"><div class="emp-prog-fill" style="width:'+d.pct+'%;background:'+color+';"></div></div><span class="emp-pct">'+d.pct+'%</span></div></td>'+
+      '<td>'+(d.late>0?'<span class="late-badge">'+d.late+'</span>':'—')+'</td>'+
+      '<td>'+(d.notes>0?'<span class="notes-badge">'+d.notes+'</span>':'—')+'</td>'+
+      '<td><button class="view-btn" onclick="showDetail(\''+d.emp.id+'\',\''+d.emp.name+'\',\''+document.getElementById('m-year').value+'\','+document.getElementById('m-month').value+')">צפה</button></td>';
+    tbody.appendChild(tr);
+  });
+};
+
+async function buildSectionEditor(){
+  const names=await getSections(currentSite.id);renderSecInputs(names);
+}
+function renderSecInputs(names){
+  const c=document.getElementById('section-inputs');c.innerHTML='';
+  names.forEach((name,i)=>{
+    const div=document.createElement('div');div.className='sec-row';
+    div.innerHTML='<div class="sec-num">'+(i+1)+'</div>'+
+      '<input class="sec-input" type="text" value="'+name+'" id="sec-input-'+i+'">'+
+      '<button class="btn-del" onclick="deleteSection('+i+')" title="מחק">×</button>';
+    c.appendChild(div);
+  });
+}
+window.addSection=function(){const names=getCurrentSectionNames();names.push('סעיף '+(names.length+1));renderSecInputs(names);};
+window.deleteSection=function(idx){
+  const names=getCurrentSectionNames();
+  if(names.length<=1){alert('חייב להיות לפחות סעיף אחד');return;}
+  if(!confirm('למחוק "'+names[idx]+'"?'))return;
+  names.splice(idx,1);renderSecInputs(names);
+};
+function getCurrentSectionNames(){const names=[];let i=0;while(document.getElementById('sec-input-'+i)){names.push(document.getElementById('sec-input-'+i).value.trim()||'סעיף '+(i+1));i++;}return names;}
+window.saveSectionNames=async function(){
+  const names=getCurrentSectionNames();
+  showLoading(true);await fbSet(sRef(currentSite.id,'config/sections'),names);cachedSecs[currentSite.id]=names;showLoading(false);
+  showSaveMsg('sections-save-msg');await renderMasterView();
+};
+
+async function buildDeadlineEditor(){
+  const dlY=document.getElementById('dl-year'),dlM=document.getElementById('dl-month');
+  if(!dlY.options.length)buildYearSelect('dl-year');
+  if(!dlM.options.length)buildMonthSelect('dl-month');
+  const y=dlY.value,m=parseInt(dlM.value);
+  const sections=await getSections(currentSite.id);
+  const deadlines=await fbGet(dlKey(currentSite.id,y,m))||{};
+  const c=document.getElementById('deadline-inputs');c.innerHTML='';
+  const info=document.getElementById('dl-info');if(info)info.textContent=MONTHS[m]+' '+y;
+  sections.forEach((name,i)=>{
+    const div=document.createElement('div');div.className='sec-row';
+    div.innerHTML='<div class="sec-num">'+(i+1)+'</div>'+
+      '<span style="flex:1;font-size:13px;font-weight:600;">'+name+'</span>'+
+      '<input type="date" class="date-input" value="'+(deadlines['s'+(i+1)]||'')+'" id="dl-input-'+i+'" style="width:150px;">';
+    c.appendChild(div);
+  });
+}
+window.buildDeadlineEditor=buildDeadlineEditor;
+window.saveDeadlines=async function(){
+  const y=document.getElementById('dl-year').value,m=parseInt(document.getElementById('dl-month').value);
+  const sections=await getSections(currentSite.id);const dl={};
+  sections.forEach((_,i)=>{const inp=document.getElementById('dl-input-'+i);if(inp&&inp.value)dl['s'+(i+1)]=inp.value;});
+  showLoading(true);await fbSet(dlKey(currentSite.id,y,m),dl);showLoading(false);showSaveMsg('dl-save-msg');
+};
+
+async function buildEmployeeManager(){
+  const emps=await getEmployees(currentSite.id);
+  _workingEmps=[...emps];
+  renderEmpRows(_workingEmps);
+}
+function renderEmpRows(emps){
+  const c=document.getElementById('emp-manage-list');c.innerHTML='';
+  emps.forEach((emp,i)=>{
+    const div=document.createElement('div');div.className='emp-row';
+    div.innerHTML='<div class="emp-num">'+(i+1)+'</div>'+
+      '<div style="display:flex;flex-direction:column;flex:1;gap:2px;min-width:80px;">'+
+        '<span class="emp-lbl">שם</span><input class="emp-name-input" type="text" value="'+emp.name+'" id="en-'+i+'"></div>'+
+      '<div style="display:flex;flex-direction:column;gap:2px;">'+
+        '<span class="emp-lbl">קוד (4)</span><input class="emp-pin-input" type="text" value="'+emp.pin+'" id="ep-'+i+'" maxlength="4" inputmode="numeric"></div>'+
+      '<button class="btn-del-emp" onclick="deleteEmployee('+i+')" title="מחק">×</button>';
+    c.appendChild(div);
+  });
+}
+let _workingEmps=[];
+window.addEmployee=function(){
+  _workingEmps.push({id:'emp'+Date.now(),name:'עובד '+(_workingEmps.length+1),pin:'0000'});
+  renderEmpRows(_workingEmps);
+};
+window.deleteEmployee=function(idx){
+  if(_workingEmps.length<=1){alert('חייב להיות לפחות עובד אחד');return;}
+  if(!confirm('למחוק "'+_workingEmps[idx].name+'"?'))return;
+  _workingEmps.splice(idx,1);renderEmpRows(_workingEmps);
+};
+window.saveEmployeeManage=async function(){
+  let errs=[];
+  const updated=_workingEmps.map((emp,i)=>{
+    const n=document.getElementById('en-'+i),p=document.getElementById('ep-'+i);
+    const nm=n?n.value.trim():emp.name,pn=p?p.value.trim():emp.pin;
+    if(!nm)errs.push('שם עובד '+(i+1)+' ריק');
+    if(!/^\d{4}$/.test(pn)){if(p)p.style.borderColor='#e53e3e';errs.push('קוד עובד '+(i+1)+' שגוי');}else if(p)p.style.borderColor='#e0e0e0';
+    return{...emp,name:nm,pin:pn};
+  });
+  if(errs.length){alert(errs.join('\n'));return;}
+  showLoading(true);await fbSet(sRef(currentSite.id,'config/employees'),updated);
+  cachedEmps[currentSite.id]=updated;_workingEmps=updated;showLoading(false);
+  await buildLoginSelectForSite(currentSite.id);showSaveMsg('emp-manage-msg');
+};
+
+window.saveLocalPin=async function(){
+  const cur=document.getElementById('lm-cur').value.trim();
+  const nw=document.getElementById('lm-new').value.trim();
+  const nw2=document.getElementById('lm-new2').value.trim();
+  const err=document.getElementById('lm-pin-err');err.textContent='';
+  const lm=await fbGet(sRef(currentSite.id,'config/localmaster'))||{pin:DEFAULT_LM_PIN};
+  if(cur!==lm.pin){err.textContent='קוד נוכחי שגוי';return;}
+  if(!/^\d{4}$/.test(nw)){err.textContent='קוד חדש חייב להיות 4 ספרות';return;}
+  if(nw!==nw2){err.textContent='הקודים לא תואמים';return;}
+  showLoading(true);await fbSet(sRef(currentSite.id,'config/localmaster'),{pin:nw});showLoading(false);
+  ['lm-cur','lm-new','lm-new2'].forEach(id=>document.getElementById(id).value='');showSaveMsg('lm-pin-msg');
+};
+
+window.showDetail=async function(empId,empName,year,month){
+  const sections=await getSections(currentSite.id);
+  const saved=await fbGet(dataKey(currentSite.id,empId,year,month))||{};
+  const deadlines=await fbGet(dlKey(currentSite.id,year,month))||{};
+  const today=new Date().toISOString().slice(0,10);
+  document.getElementById('detail-title').textContent='פרטי '+empName+' — '+MONTHS[month]+' '+year;
+  const tbody=document.getElementById('detail-body');tbody.innerHTML='';
+  sections.forEach((name,i)=>{
+    const s=saved['s'+(i+1)]||{};const dl=deadlines['s'+(i+1)]||'';const isLate=dl&&!s.done&&today>dl;
+    const tr=document.createElement('tr');if(s.done)tr.className='row-done';else if(isLate)tr.className='row-late';
+    tr.innerHTML='<td style="color:#888;font-size:11px;">'+(i+1)+'</td>'+
+      '<td style="font-weight:600;font-size:12px;">'+name+'</td>'+
+      '<td>'+(dl?'<span class="dl-badge '+(isLate?'dl-late':'dl-ok')+'">'+formatDate(dl)+'</span>':'—')+'</td>'+
+      '<td style="font-size:12px;">'+(s.date?formatDate(s.date):'—')+'</td>'+
+      '<td><div class="status-cell"><div class="status-dot '+(s.done?'status-done':isLate?'status-late':'status-pending')+'"></div><span style="font-size:11px;">'+(s.done?'בוצע':isLate?'באיחור':'ממתין')+'</span></div></td>'+
+      '<td>'+(s.note?'<span class="note-text-badge">'+s.note+'</span>':'—')+'</td>';
+    tbody.appendChild(tr);
+  });
+  document.getElementById('detail-modal').classList.add('open');
+};
+window.closeDetail=function(){document.getElementById('detail-modal').classList.remove('open');};
+
+function smTab(tab,btn){
+  document.querySelectorAll('.sm-tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  ['sm-overview','sm-detail','sm-manage','sm-settings'].forEach(p=>{
+    document.getElementById(p).style.display=(p==='sm-'+tab)?'block':'none';
+  });
+  if(tab==='overview')renderSMOverview();
+  if(tab==='detail'){buildSMDetailSiteSelect();buildYearSelect('sm-detail-year');buildMonthSelect('sm-detail-month');renderSMDetail();}
+  if(tab==='manage')buildSMSitesList();
+}
+
+window.renderSMOverview=async function(){
+  const y=document.getElementById('sm-year').value;
+  const m=parseInt(document.getElementById('sm-month').value);
+  const cards=document.getElementById('sm-overview-cards');cards.innerHTML='';
+  const tbody=document.getElementById('sm-sites-table');tbody.innerHTML='';
+  const labels=[],data=[],colors=['#3182ce','#38a169','#e6a817','#9f3fbf','#e53e3e','#0f3460'];
+  for(let si=0;si<(cachedSites||[]).length;si++){
+    const site=cachedSites[si];
+    const emps=await getEmployees(site.id);
+    const sections=await getSections(site.id);
+    const allData=await fbGet(sRef(site.id,'data'))||{};
+    const deadlines=await fbGet(dlKey(site.id,y,m))||{};
+    const today=new Date().toISOString().slice(0,10);
+    const empData=emps.map(emp=>{
+      const md=(allData[emp.id]&&allData[emp.id]['y'+y+'_m'+m])||{};
+      const rows=sections.map((_,i)=>{const s=md['s'+(i+1)]||{};const dl=deadlines['s'+(i+1)]||'';return{done:s.done||false,isLate:dl&&!s.done&&today>dl};});
+      return{done:rows.filter(r=>r.done).length,total:rows.length,pct:Math.round(rows.filter(r=>r.done).length/rows.length*100),late:rows.filter(r=>r.isLate).length};
+    });
+    const avgPct=Math.round(empData.reduce((s,d)=>s+d.pct,0)/empData.length);
+    const totalLate=empData.reduce((s,d)=>s+d.late,0);
+    const col=colors[si%colors.length];
+    const card=document.createElement('div');card.className='site-ov-card';
+    card.innerHTML='<div class="site-ov-hdr"><span class="site-ov-emoji">'+site.emoji+'</span><div class="site-ov-name">'+site.name+'</div></div>'+
+      '<div class="site-ov-prog-lbl"><span>'+emps.length+' עובדים</span><span>'+avgPct+'%</span></div>'+
+      '<div class="site-ov-track"><div class="site-ov-fill" style="width:'+avgPct+'%;background:'+col+';"></div></div>'+
+      '<div class="site-ov-stats">'+(totalLate>0?'<span style="color:#e53e3e;">'+totalLate+' באיחור</span>':'ללא איחורים')+'</div>';
+    card.onclick=()=>{document.getElementById('sm-detail-site').value=site.id;smTab('detail',document.querySelectorAll('.sm-tab')[1]);};
+    cards.appendChild(card);
+    labels.push(site.name);data.push(avgPct);
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td style="font-weight:700;"><span style="font-size:16px;">'+site.emoji+'</span> '+site.name+'</td>'+
+      '<td>'+emps.length+'</td><td>'+sections.length+'</td>'+
+      '<td><div style="display:flex;align-items:center;gap:6px;"><div class="emp-prog-bar"><div class="emp-prog-fill" style="width:'+avgPct+'%;background:'+col+';"></div></div><span class="emp-pct">'+avgPct+'%</span></div></td>'+
+      '<td>'+(totalLate>0?'<span class="late-badge">'+totalLate+'</span>':'—')+'</td>';
+    tbody.appendChild(tr);
+  }
+  if(smChartInst)smChartInst.destroy();
+  smChartInst=new Chart(document.getElementById('smChart').getContext('2d'),{
+    type:'bar',data:{labels,datasets:[{data,backgroundColor:colors.slice(0,labels.length),borderRadius:5}]},
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}}
+  });
+};
+
+function buildSMDetailSiteSelect(){
+  const sel=document.getElementById('sm-detail-site');sel.innerHTML='';
+  (cachedSites||[]).forEach(site=>{const o=document.createElement('option');o.value=site.id;o.textContent=site.emoji+' '+site.name;sel.appendChild(o);});
+}
+
+window.renderSMDetail=async function(){
+  const siteId=document.getElementById('sm-detail-site').value;
+  const y=document.getElementById('sm-detail-year').value;
+  const m=parseInt(document.getElementById('sm-detail-month').value);
+  const site=(cachedSites||[]).find(s=>s.id===siteId);if(!site)return;
+  document.getElementById('sd-title').textContent='פרטי עובדים — '+site.emoji+' '+site.name;
+  const emps=await getEmployees(siteId);
+  const sections=await getSections(siteId);
+  const allData=await fbGet(sRef(siteId,'data'))||{};
+  const deadlines=await fbGet(dlKey(siteId,y,m))||{};
+  const today=new Date().toISOString().slice(0,10);
+  const empData=emps.map(emp=>{
+    const md=(allData[emp.id]&&allData[emp.id]['y'+y+'_m'+m])||{};
+    const rows=sections.map((n,i)=>{const s=md['s'+(i+1)]||{};const dl=deadlines['s'+(i+1)]||'';return{done:s.done||false,isLate:dl&&!s.done&&today>dl,note:s.note||''};});
+    const done=rows.filter(r=>r.done).length;
+    return{emp,done,total:rows.length,pct:Math.round(done/rows.length*100),late:rows.filter(r=>r.isLate).length,notes:rows.filter(r=>r.note&&r.note.trim()).length};
+  });
+  document.getElementById('sd-emps').textContent=emps.length;
+  document.getElementById('sd-comp').textContent=empData.filter(d=>d.pct===100).length;
+  document.getElementById('sd-avg').textContent=Math.round(empData.reduce((s,d)=>s+d.pct,0)/empData.length)+'%';
+  document.getElementById('sd-late').textContent=empData.reduce((s,d)=>s+d.late,0);
+  const tbody=document.getElementById('sd-table');tbody.innerHTML='';
+  empData.forEach(d=>{
+    const color=d.late>0?'#e53e3e':d.pct===100?'#38a169':d.pct>=50?'#3182ce':d.pct>0?'#e6a817':'#ccc';
+    const tr=document.createElement('tr');if(d.late>0)tr.style.background='#fff5f5';
+    tr.innerHTML='<td style="font-weight:700;">'+d.emp.name+'</td>'+
+      '<td style="color:#666;font-size:11px;">'+d.done+'/'+d.total+'</td>'+
+      '<td><div style="display:flex;align-items:center;gap:6px;"><div class="emp-prog-bar"><div class="emp-prog-fill" style="width:'+d.pct+'%;background:'+color+';"></div></div><span class="emp-pct">'+d.pct+'%</span></div></td>'+
+      '<td>'+(d.late>0?'<span class="late-badge">'+d.late+'</span>':'—')+'</td>'+
+      '<td>'+(d.notes>0?'<span class="notes-badge">'+d.notes+'</span>':'—')+'</td>'+
+      '<td><button class="view-btn" onclick="showDetailSM(\''+siteId+'\',\''+d.emp.id+'\',\''+d.emp.name+'\',\''+y+'\','+m+')">צפה</button></td>';
+    tbody.appendChild(tr);
+  });
+};
+
+window.showDetailSM=async function(siteId,empId,empName,year,month){
+  const prevSite=currentSite;
+  currentSite=(cachedSites||[]).find(s=>s.id===siteId)||{id:siteId};
+  await window.showDetail(empId,empName,year,month);
+  currentSite=prevSite;
+};
+
+function buildSMSitesList(){
+  const c=document.getElementById('sm-sites-list');c.innerHTML='';
+  (cachedSites||[]).forEach((site,i)=>{
+    const div=document.createElement('div');div.className='manage-site-row';
+    const emojiSel=EMOJIS.map(e=>'<option value="'+e+'" '+(site.emoji===e?'selected':'')+'>'+e+'</option>').join('');
+    div.innerHTML='<div class="emp-num">'+(i+1)+'</div>'+
+      '<select id="sm-emoji-'+i+'" style="padding:6px;border:1.5px solid #e0e0e0;border-radius:7px;font-size:16px;outline:none;cursor:pointer;">'+emojiSel+'</select>'+
+      '<input style="flex:1;min-width:80px;padding:8px 11px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;outline:none;direction:rtl;" value="'+site.name+'" id="sm-sname-'+i+'">'+
+      '<button class="btn-del" onclick="deleteSite('+i+')" title="מחק">×</button>';
+    c.appendChild(div);
+  });
+}
+window.addSite=async function(){
+  const newId='site'+Date.now();
+  const newSite={id:newId,name:'מקום עבודה '+(cachedSites.length+1),emoji:'🏢'};
+  showLoading(true);
+  await initSite(newId);
+  cachedSites.push(newSite);
+  await fbSet('v3/config/sites',cachedSites);
+  showLoading(false);
+  buildSMSitesList();
+  buildSitePicker();
+  buildSMDetailSiteSelect();
+  showSaveMsg('sm-manage-msg');
+};
+window.deleteSite=function(idx){
+  if((cachedSites||[]).length<=1){alert('חייב להיות לפחות מקום עבודה אחד');return;}
+  if(!confirm('למחוק "'+cachedSites[idx].name+'"? הנתונים יישמרו ב-Firebase.'))return;
+  cachedSites.splice(idx,1);buildSMSitesList();
+};
+window.saveSites=async function(){
+  const updated=[];
+  let i=0;
+  while(document.getElementById('sm-sname-'+i)){
+    const name=document.getElementById('sm-sname-'+i).value.trim();
+    const emoji=document.getElementById('sm-emoji-'+i).value;
+    if(!name){alert('שם מקום '+(i+1)+' ריק');return;}
+    updated.push({...cachedSites[i],name,emoji});i++;
+  }
+  showLoading(true);
+  await fbSet('v3/config/sites',updated);
+  cachedSites=updated;showLoading(false);
+  buildSitePicker();buildSMDetailSiteSelect();showSaveMsg('sm-manage-msg');
+};
+
+window.saveSMPin=async function(){
+  const cur=document.getElementById('sm-cur').value.trim();
+  const nw=document.getElementById('sm-new').value.trim();
+  const nw2=document.getElementById('sm-new2').value.trim();
+  const err=document.getElementById('sm-pin-err');err.textContent='';
+  const sm=await fbGet('v3/config/supermaster')||{pin:DEFAULT_SM_PIN};
+  if(cur!==sm.pin){err.textContent='קוד נוכחי שגוי';return;}
+  if(!/^\d{4}$/.test(nw)){err.textContent='קוד חדש חייב להיות 4 ספרות';return;}
+  if(nw!==nw2){err.textContent='הקודים לא תואמים';return;}
+  showLoading(true);await fbSet('v3/config/supermaster',{pin:nw});showLoading(false);
+  ['sm-cur','sm-new','sm-new2'].forEach(id=>document.getElementById(id).value='');showSaveMsg('sm-pin-msg');
+};
+</script>
+</body>
+</html>
